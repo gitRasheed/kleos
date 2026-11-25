@@ -25,6 +25,8 @@
     "recipes",
     "skills",
     "LICENSE",
+    "AGENTS.md",
+    "STATE_MACHINES.md",
     "examples"
   ],
   "engines": {

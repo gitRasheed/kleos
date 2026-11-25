@@ -785,6 +785,7 @@ export function checkAudio(
   const hum = thresholds.humRatioDb === undefined ? [] : measureHum(audio.channels, audio.sampleRate);
   for (const h of hum) {
     const limit = thresholds.humRatioDb ?? Infinity;
+    if (h.fundamentalDbfs === null || h.fundamentalDbfs < -55) continue;
     if (h.fundamentalDb >= limit || (h.fundamentalDb >= limit / 2 && h.harmonicDb >= limit / 2)) {
       findings.push({ code: 'MAINS_HUM', severity: 'fail', message: `${h.hz} Hz line is ${h.fundamentalDb} dB above its neighbours` });
     }

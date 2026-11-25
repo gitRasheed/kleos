@@ -85,6 +85,46 @@ function runCli(args: readonly string[]): { status: number | null; stdout: strin
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
+it('detects a single click between the default limit and twice that limit', () => {
+  const samples = tone(440, 0.5, 0.25);
+  samples[12000] += 0.04;
+  const report = checkAudio(mono(samples), 'click.wav');
+  const ratio = report.channels[0].clickRatio;
+  assert.ok(ratio > 25 && ratio < 50, String(ratio));
+  assert.ok(has(report, 'IMPULSE_CLICK'));
+});
+
+it('edits tracks and clips whose IDs look like numbers', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aa-ids-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const project = path.join(dir, 'score.json');
+  for (const args of [
+    ['init', project, '--id', '001'],
+    ['add-track', project, '--track', '{"id":"1","instrument":"piano"}'],
+    ['add-clip', project, '--track-id', '1', '--clip', '{"id":"02","startBeat":0}'],
+    ['add-notes', project, '--track-id', '1', '--clip-id', '02', '--notes', '[{"midi":67,"startBeat":0,"durationBeats":1}]'],
+  ]) {
+    const result = runCli(args);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  }
+  const score = JSON.parse(fs.readFileSync(project, 'utf8'));
+  assert.equal(score.id, '001');
+  assert.equal(score.tracks[0].clips[0].notes[0].midi, 67);
+});
+
+it('rejects unknown and misplaced fade flags before writing the output', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aa-fade-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const input = path.join(dir, 'tone.wav'), output = path.join(dir, 'fade.wav');
+  fs.writeFileSync(input, encodeWav([tone(440, 0.2, 0.25)], SR));
+  for (const flag of ['--inn-s', '--semitones']) {
+    const result = runCli(['edit', 'fade', '--in', input, '--out', output, flag, '0.12']);
+    assert.equal(result.status, 2);
+    assert.ok(result.stderr.includes(flag), result.stderr);
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
 describe('click and cut-tail gates are relative to signal level', () => {
   for (const waveform of ['saw', 'square'] as const) {
     for (const freqHz of [55, 220, 880]) {
@@ -305,6 +345,13 @@ describe('CLI help', () => {
       }
     });
   }
+
+  it('lists one render command and one set of exit codes', () => {
+    const { stdout } = runCli(['--help']);
+    assert.equal(stdout.match(/^ {2}render /gm)?.length, 1);
+    assert.equal(stdout.match(/^Exit codes:/gm)?.length, 1);
+    assert.match(stdout, /^ {2}analyze /m);
+  });
 
   it('prints usage to stderr and exits 2 with no command', () => {
     const res = runCli([]);

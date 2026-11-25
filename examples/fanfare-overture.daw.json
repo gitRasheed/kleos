@@ -1,7 +1,7 @@
 {
   "format": "agent-daw/v1",
-  "id": "star-wars-overture",
-  "title": "Squadron Overture (original, in a heroic space-opera and rock-orchestral style)",
+  "id": "fanfare-overture",
+  "title": "Fanfare Overture (original, in a heroic space-opera and rock-orchestral style)",
   "kind": "loop",
   "loop": true,
   "tempo": {
@@ -38,7 +38,7 @@
       "layer": "tension"
     },
     {
-      "id": "dogfight",
+      "id": "allegro",
       "startBar": 8,
       "bars": 4,
       "layer": "combat"
@@ -218,7 +218,7 @@
           ]
         },
         {
-          "id": "dogfight",
+          "id": "allegro",
           "startBeat": 32,
           "notes": [
             {
@@ -448,7 +448,7 @@
       ],
       "clips": [
         {
-          "id": "dogfight",
+          "id": "allegro",
           "startBeat": 32,
           "notes": [
             {
@@ -2236,7 +2236,7 @@
           ]
         },
         {
-          "id": "dogfight",
+          "id": "allegro",
           "startBeat": 32,
           "notes": [
             {

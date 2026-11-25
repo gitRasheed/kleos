@@ -19,7 +19,7 @@ const note = (pitch, startBeat, durationBeats, velocity, articulation = 'normal'
   ...extra,
 });
 
-// Bars 1-16: fanfare | flight | dogfight | climax. Each chord is [bass root, triad tones in the middle register].
+// Bars 1-16: fanfare | flight | allegro | climax. Each chord is [bass root, triad tones in the middle register].
 const CHORDS = [
   ['D2', ['D4', 'F4', 'A4']], ['Bb1', ['D4', 'F4', 'Bb4']], ['F2', ['C4', 'F4', 'A4']], ['C2', ['C4', 'E4', 'G4']],
   ['D2', ['D4', 'F4', 'A4']], ['Bb1', ['D4', 'F4', 'Bb4']], ['G1', ['D4', 'G4', 'Bb4']], ['A1', ['C#4', 'E4', 'A4']],
@@ -29,11 +29,11 @@ const CHORDS = [
 const SECTIONS = [
   { id: 'fanfare', startBar: 0, bars: 4, layer: 'base' },
   { id: 'flight', startBar: 4, bars: 4, layer: 'tension' },
-  { id: 'dogfight', startBar: 8, bars: 4, layer: 'combat' },
+  { id: 'allegro', startBar: 8, bars: 4, layer: 'combat' },
   { id: 'climax', startBar: 12, bars: 4, layer: 'climax' },
 ];
 const BPB = 4;
-const sectionDyn = { fanfare: 1, flight: 0.72, dogfight: 1.08, climax: 1.18 };
+const sectionDyn = { fanfare: 1, flight: 0.72, allegro: 1.08, climax: 1.18 };
 
 // The hook: a repeated-note pickup that leaps a fifth, then falls by step. Reused transposed in every section.
 function hook(root, start, vel, art = 'accent') {
@@ -71,8 +71,8 @@ function hornsTrack() {
     note('A4', 8, 0.75, 100, 'accent'), note('A4', 8.75, 0.25, 88, 'staccato'), note('C5', 9, 1.5, 106, 'legato'), note('Bb4', 10.5, 0.5, 92), note('A4', 11, 1, 96),
     note('G4', 12, 2, 98, 'legato'), note('E4', 14, 1, 90), note('G4', 15, 0.5, 86), note('A4', 15.5, 0.5, 92, 'accent'),
   ];
-  // Dogfight: the hook head sequenced down by step, horns answering the trumpets.
-  const dogfight = [
+  // Allegro: the hook head sequenced down by step, horns answering the trumpets.
+  const allegro = [
     note('A3', 2, 1, 96, 'sforzando'), note('A3', 3.5, 0.5, 90, 'accent'),
     note('G3', 6, 1, 94, 'sforzando'), note('G3', 7.5, 0.5, 88, 'accent'),
     note('F3', 10, 1, 94, 'sforzando'), note('F3', 11.5, 0.5, 88, 'accent'),
@@ -89,12 +89,12 @@ function hornsTrack() {
     id: 'horns', name: 'French horns (a4)', role: 'lead', layer: 'base', gainDb: -2,
     instrument: { type: 'brass-horn', params: { players: 4 } },
     fx: [{ type: 'eq3', lowDb: -2, midDb: 1.5, highDb: 0, lowHz: 180, midHz: 700, highHz: 5000, midQ: 0.8 }, { type: 'reverb', preset: 'hall', decay: 0.84, mix: 0.32, predelayMs: 28, damping: 0.45 }],
-    clips: [clip('fanfare', 0, fanfare), clip('dogfight', 8, dogfight), clip('climax', 12, climax)],
+    clips: [clip('fanfare', 0, fanfare), clip('allegro', 8, allegro), clip('climax', 12, climax)],
   };
 }
 
 function trumpetsTrack() {
-  const dogfight = [
+  const allegro = [
     ...hook(m('D5'), 0, 108),
     note('C5', 4, 0.75, 104, 'accent'), note('C5', 4.75, 0.25, 92, 'staccato'), note('G5', 5, 2, 110, 'legato'), note('F5', 7, 0.5, 96), note('E5', 7.5, 0.5, 94),
     ...hook(m('Bb4'), 8, 106),
@@ -110,7 +110,7 @@ function trumpetsTrack() {
     id: 'trumpets', name: 'Trumpets (a3)', role: 'lead', layer: 'combat', gainDb: -4, pan: 0.22,
     instrument: { type: 'brass-trumpet', params: { players: 3 } },
     fx: [{ type: 'eq3', lowDb: -3, midDb: 0, highDb: -1.5, lowHz: 250, midHz: 1500, highHz: 6000, midQ: 0.8 }, { type: 'reverb', preset: 'hall', decay: 0.84, mix: 0.3, predelayMs: 24, damping: 0.4 }],
-    clips: [clip('dogfight', 8, dogfight), clip('climax', 12, climax)],
+    clips: [clip('allegro', 8, allegro), clip('climax', 12, climax)],
   };
 }
 
@@ -168,20 +168,20 @@ function celloTrack() {
     note('Bb3', 8, 1.5, 72, 'legato'), note('A3', 9.5, 0.5, 66), note('G3', 10, 2, 70, 'legato'),
     note('A3', 12, 2, 76, 'legato'), note('E3', 14, 1, 72), note('C#4', 15, 1, 78),
   ];
-  // Dogfight and climax: a syncopated counter-riff in the tenor register.
+  // Allegro and climax: a syncopated counter-riff in the tenor register.
   const riff = (bar, root, v) => [
     note(root, bar * 4, 0.75, v, 'accent'), note(root + 3, bar * 4 + 0.75, 0.75, v * 0.9), note(root + 5, bar * 4 + 1.5, 0.5, v * 0.95, 'staccato'),
     note(root + 7, bar * 4 + 2, 0.75, v, 'accent'), note(root + 5, bar * 4 + 2.75, 0.75, v * 0.9), note(root + 3, bar * 4 + 3.5, 0.5, v * 0.85, 'staccato'),
   ];
   const roots = ['D3', 'C3', 'Bb2', 'A2'];
-  const dogfight = roots.flatMap((r, b) => riff(b, m(r) + 12, 96));
+  const allegro = roots.flatMap((r, b) => riff(b, m(r) + 12, 96));
   const climaxRoots = ['Bb2', 'C3', 'D3', 'A2'];
   const climax = climaxRoots.flatMap((r, b) => riff(b, m(r) + 12, 104));
   return {
     id: 'celli', name: 'Cellos', role: 'counter', layer: 'tension', gainDb: -5,
     instrument: { type: 'strings-cello', params: { players: 4 } },
     fx: [{ type: 'reverb', preset: 'hall', decay: 0.84, mix: 0.3, predelayMs: 26, damping: 0.45 }],
-    clips: [clip('flight', 4, flight), clip('dogfight', 8, dogfight), clip('climax', 12, climax)],
+    clips: [clip('flight', 4, flight), clip('allegro', 8, allegro), clip('climax', 12, climax)],
   };
 }
 
@@ -321,8 +321,8 @@ function flybyTrack() {
 
 const project = {
   format: 'agent-daw/v1',
-  id: 'star-wars-overture',
-  title: 'Squadron Overture (original, in a heroic space-opera and rock-orchestral style)',
+  id: 'fanfare-overture',
+  title: 'Fanfare Overture (original, in a heroic space-opera and rock-orchestral style)',
   kind: 'loop',
   loop: true,
   tempo: { bpm: 120, beatsPerBar: 4 },

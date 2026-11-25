@@ -47,6 +47,7 @@ export interface HumMetrics {
   readonly hz: 50 | 60;
   // Line level over the median of its neighbours; weaker of two windows on long files.
   readonly fundamentalDb: number;
+  readonly fundamentalDbfs: number | null;
   readonly harmonicDb: number;
 }
 
@@ -82,17 +83,19 @@ export function measureHum(channels: readonly Float64Array[], sr: number): HumMe
   const starts = mono.length >= 2 * len ? [0, mono.length - len] : [Math.floor((mono.length - len) / 2)];
   // Fixed offsets keep the reference spectrum independent of the score tempo.
   const offsets = [-3, -2, -1.5, -1, -0.75, -0.5, 0.5, 0.75, 1, 1.5, 2, 3];
-  const lineDb = (start: number, f: number): number => {
-    const p = goertzelPower(mono, start, len, window, f, sr);
+  const lineDb = (start: number, f: number, p = goertzelPower(mono, start, len, window, f, sr)): number => {
     const floor = offsets.map((o) => goertzelPower(mono, start, len, window, f + o, sr)).sort((a, b) => a - b);
     const mid = floor.length / 2;
     const med = ((floor[mid - 1] ?? 0) + (floor[mid] ?? 0)) / 2;
     return 10 * Math.log10((p + 1e-30) / (med + 1e-30));
   };
   return ([50, 60] as const).map((hz) => {
-    const fund = Math.min(...starts.map((st) => lineDb(st, hz)));
+    const powers = starts.map((st) => goertzelPower(mono, st, len, window, hz, sr));
+    const fund = Math.min(...starts.map((st, i) => lineDb(st, hz, powers[i])));
+    // The Hann window sums to (len - 1) / 2; a real sine splits its amplitude across two lines.
+    const amplitude = 4 * Math.sqrt(Math.max(0, Math.min(...powers))) / (len - 1);
     const harm = Math.min(...starts.map((st) => Math.max(lineDb(st, 2 * hz), lineDb(st, 3 * hz))));
-    return { hz, fundamentalDb: round(fund, 2), harmonicDb: round(harm, 2) };
+    return { hz, fundamentalDbfs: amplitude > 0 ? round(20 * Math.log10(amplitude), 2) : null, fundamentalDb: round(fund, 2), harmonicDb: round(harm, 2) };
   });
 }
 

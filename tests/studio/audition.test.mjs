@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { auditionHtml } from '../../dist/io/auditionHtml.js';
 import { encodeDitheredWav } from '../../dist/io/wav.js';
@@ -14,14 +15,17 @@ function stem(id, hz, seconds) {
   return { id, wav: encodeDitheredWav({ sampleRate: sr, channels: [channel] }) };
 }
 test('standalone page decodes embedded audio, synchronizes transport and exports the audible mix', { timeout: 15000 }, async t => {
-  const dir = mkdtempSync(resolve('.browser-'));
+  const candidates = process.env.CHROME ? [process.env.CHROME] : ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'];
+  const chrome = candidates.find(bin => spawnSync(bin, ['--version']).error?.code !== 'ENOENT');
+  if (!chrome) return t.skip('Chrome or Chromium is unavailable. Set CHROME to its executable.');
+  const dir = mkdtempSync(join(tmpdir(), 'aa-'));
   const file = join(dir, 'audition.html');
   const id = 'lead</script><strong>';
   const html = auditionHtml([stem(id, 440, 3), stem('pad', 220, 2)], [
     { timeS: 0.5, code: 'MASKED', trackId: id, maskers: ['pad'] }, { timeS: 2.25, code: 'BUS_OVER', id: 'group' }]);
   writeFileSync(file, html);
   assert.ok(!html.includes(id));
-  const proc = spawn(process.env.CHROME ?? 'google-chrome-stable', [
+  const proc = spawn(chrome, [
     '--headless', '--no-sandbox', '--disable-gpu', '--disable-background-networking', '--disable-crash-reporter',
     '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check', '--remote-debugging-pipe',
     '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--user-data-dir=' + join(dir, 'profile'),

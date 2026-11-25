@@ -76,6 +76,32 @@ test('50 Hz mains hum with harmonics is caught', () => {
   assert.ok(codes(r).includes('MAINS_HUM'), JSON.stringify(r.hum));
 });
 
+for (const hz of [50, 60]) {
+  test(`the ${hz} Hz hum floor uses absolute line amplitude`, () => {
+    for (const dbfs of [-56, -54]) {
+      const sr = 16000;
+      const samples = Float64Array.from({ length: sr * 3 }, (_, i) =>
+        10 ** (dbfs / 20) * Math.sin(2 * Math.PI * hz * i / sr));
+      const report = gateAudio({ sampleRate: sr, channels: [samples] });
+      const line = report.hum.find(h => h.hz === hz);
+      assert.equal(line?.fundamentalDbfs, dbfs);
+      assert.equal(codes(report).includes('MAINS_HUM'), dbfs > -55);
+    }
+  });
+}
+
+test('raw and music check the same 32 kHz WAV at its recorded rate', t => {
+  const dir = tmpDir();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const wav = path.join(dir, 'control.wav');
+  fs.writeFileSync(wav, encodeWav({ sampleRate: 32000, channels: [new Float64Array(32000)] }));
+  for (const profile of ['raw', 'music']) {
+    const result = spawnSync(process.execPath, [cli, 'check', wav, '--profile', profile], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(JSON.parse(result.stdout).format.sampleRateHz, 32000);
+  }
+});
+
 test('sustained G1 (49 Hz) and B1 (61.7 Hz) bass under a steady timpani pulse are not mistaken for hum', () => {
   const p = project({
     bars: 4,

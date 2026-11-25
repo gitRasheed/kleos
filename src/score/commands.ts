@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import type { EditOp } from './edit.js';
 import { critiqueProject, importNotes } from './ops.js';
 import { saveProjectFile } from './project.js';
 import { ToolError, findTool, readProject } from '../tools.js';
@@ -24,24 +25,23 @@ export const SCORE_USAGE = `Project
 Sound
   audition <project.json> --out <dir>
   masking <project.json>
-  render <project.json> --out <file.wav> [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers base,combat] [--tracks id1,id2]
+  render <recipe.json | project.json> --out <file.wav>
+         Score options: [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers base,combat] [--tracks id1,id2]
          --repeats N   loops only: --out X.wav keeps one pass and X_xN.wav beside it holds N; both paths
                        are printed as "out" and "repeatedOut"
          --tracks ids  render only these tracks, muted or not (alias --solo); the master still
-                       normalises the result to the target LUFS
+                       normalizes the result to the target LUFS
          The report lists each track's peak, LUFS and RMS dBFS before the master bus, and warns
          (trackBalance) when a track sits over 16 LU below the loudest.
   critique <project.json> [--min 0.85]
-  analyse <file.wav | project.json>
+  analyze <file.wav | project.json>
   edit <op> --in <a.wav> [--in <b.wav>] --out <file> [--backend native|sox|rubberband|ffmpeg] [--<param> value ...]
        ops: trim-silence, fade, normalize, pitch, stretch, layer, export
        export --codec opus|ogg|mp3|flac [--bitrate 96k]: encode through ffmpeg with bitexact flags,
        so the same WAV gives the same bytes (defaults: opus 96k VBR, ogg 128k, mp3 192k)
   export-midi <project.json> --out <file.mid>
 
-  mcp     stdio MCP server exposing project and audio tools
-
-Exit codes: 0 pass, 1 failed check (invalid project, gate findings, critic below --min), 2 usage or runtime error.`;
+  mcp     stdio MCP server exposing project and audio tools`;
 
 interface Parsed {
   readonly positional: string[];
@@ -54,9 +54,11 @@ function parseArgs(argv: readonly string[]): Parsed {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i] ?? '';
     if (a.startsWith('--')) {
-      const key = a.slice(2);
+      const key = a.slice(2).replace(/[A-Z]/g, c => '-' + c.toLowerCase());
       const next = argv[i + 1];
-      const value = next === undefined || next.startsWith('--') ? 'true' : (i += 1, next);
+      const missing = next === undefined || next.startsWith('--');
+      if (missing && !BOOLEAN_FLAGS.has(key)) throw new ToolError(`--${key} requires a value`);
+      const value = missing ? 'true' : (i += 1, next);
       flags.set(key, [...(flags.get(key) ?? []), value]);
     } else positional.push(a);
   }
@@ -65,17 +67,32 @@ function parseArgs(argv: readonly string[]): Parsed {
 
 const camel = (k: string): string => k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
-function jsonish(v: string): unknown {
-  const t = v.trim();
-  if (t === 'true' || t === 'false') return t === 'true';
-  if (t !== '' && Number.isFinite(Number(t))) return Number(t);
-  if (t.startsWith('{') || t.startsWith('[') || t.startsWith('"')) return JSON.parse(t) as unknown;
-  return v;
-}
+const BOOLEAN_FLAGS = new Set(['overwrite', 'full', 'loop', 'preserve-duration']);
+const JSON_FLAGS = new Set(['track', 'clip', 'notes', 'fx', 'automation', 'gains-db', 'offsets-s']);
+const EDIT_FLAGS: Record<EditOp, readonly string[]> = {
+  'trim-silence': ['threshold-db', 'pad-ms'],
+  fade: ['in-s', 'out-s', 'curve'],
+  normalize: ['lufs', 'peak-db', 'category', 'ceiling-dbtp', 'loop'],
+  pitch: ['semitones', 'preserve-duration'],
+  stretch: ['ratio'],
+  layer: ['gains-db', 'offsets-s'],
+  export: ['codec', 'bitrate'],
+};
 
 function flagArgs(flags: Map<string, string[]>, skip: readonly string[] = []): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [k, vs] of flags) if (!skip.includes(k)) out[camel(k)] = jsonish(vs[vs.length - 1] ?? '');
+  for (const [key, values] of flags) {
+    if (skip.includes(key)) continue;
+    const value = values[values.length - 1];
+    if (BOOLEAN_FLAGS.has(key)) {
+      if (value !== 'true' && value !== 'false') throw new ToolError(`--${key} expects true or false`);
+      out[camel(key)] = value === 'true';
+    } else if (JSON_FLAGS.has(key) || (key === 'instrument' && /^[{"]/.test(value.trimStart()))) {
+      out[camel(key)] = JSON.parse(value) as unknown;
+    } else {
+      out[camel(key)] = value;
+    }
+  }
   return out;
 }
 
@@ -152,11 +169,18 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
       return result.score < min ? 1 : 0;
     }
     case 'analyse':
-      if (first === undefined) throw new ToolError('analyse needs a file');
+    case 'analyze':
+      if (first === undefined) throw new ToolError('analyze needs a file');
       return callTool('analyse', first.endsWith('.wav') ? { wav: first } : { project: first });
     case 'edit': {
       const op = first;
       if (op === undefined) throw new ToolError('edit needs an op');
+      if (!Object.hasOwn(EDIT_FLAGS, op)) throw new ToolError(`unknown edit operation "${op}"`);
+      const common = ['in', 'out', 'backend', 'bit-depth'];
+      const allowed = [...common, ...EDIT_FLAGS[op as EditOp]];
+      for (const key of flags.keys()) {
+        if (!allowed.includes(key)) throw new ToolError(`Unknown flag for edit ${op}: --${key}`);
+      }
       const inputs = flags.get('in') ?? [];
       const out = flags.get('out')?.[0];
       if (out === undefined) throw new ToolError('edit needs --out');
@@ -168,7 +192,7 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
         out,
         ...(backend !== undefined ? { backend } : {}),
         ...(bitDepth !== undefined ? { bitDepth: Number(bitDepth) } : {}),
-        params: flagArgs(flags, ['in', 'out', 'backend', 'bit-depth']),
+        params: flagArgs(flags, common),
       });
     }
     case 'import-notes': {

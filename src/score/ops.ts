@@ -10,7 +10,7 @@ import type { CheckReport } from '../types.js';
 import { exportMidi } from './midi.js';
 import { FORMAT, parseProject, projectSummary, type Layer, type ParseResult, type Project } from './project.js';
 import { renderProject, tile } from './render.js';
-import { encodeDitheredWav, readWav, readWavFile, writeWav, type BitDepth } from '../io/wav.js';
+import { encodeDitheredWav, readWav, writeWav, type BitDepth } from '../io/wav.js';
 
 export interface RenderFilesOptions {
   readonly projectDir?: string;
@@ -85,7 +85,7 @@ export function repeatsPath(out: string, repeats: number): string {
 
 export function checkFile(file: string, p: Project | null, o: CheckOptions & { pngDir?: string } = {}): CheckReport {
   const profile = o.profile ?? (p === null ? 'raw' : p.kind === 'sfx' ? 'sfx' : 'music');
-  const audio = profile === 'raw' ? readWavFile(file) : readWav(file);
+  const audio = readWav(file);
   const options = {
     ...(p ? { bpm: p.tempo.bpm, beatsPerBar: p.tempo.beatsPerBar, loop: p.loop, targetLufs: p.master.targetLufs } : {}),
     ...o, profile,

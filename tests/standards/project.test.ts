@@ -15,6 +15,19 @@ function directory(t: TestContext) {
   return dir;
 }
 
+for (const score of ['beethoven', 'mozart', 'piano-scale']) {
+  test(`imported ${score} passes the project gate after rendering`, t => {
+    const dir = directory(t);
+    const file = path.join(dir, 'project.json');
+    const wav = path.join(dir, 'render.wav');
+    cli('import-abc', path.join(fixtures, score + '.abc'), '--out', file);
+    cli('render', file, '--out', wav);
+    const report = JSON.parse(cli('check', wav, '--project', file));
+    assert.equal(report.ok, true);
+    assert.equal(report.thresholds.maxClickRatio, 25);
+  });
+}
+
 test('the ABC and MusicXML commands retain the Mozart parts, cut time and written transpositions', t => {
   const dir = directory(t);
   const file = path.join(dir, 'mozart.json');

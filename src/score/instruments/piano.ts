@@ -107,6 +107,12 @@ function render(ev: NoteEvent, params: Params): Stereo {
       }
     }
   }
+  const attackFrames = Math.round(0.002 * sr);
+  for (let i = 0; i < Math.min(attackFrames, frames); i += 1) {
+    const gain = 0.5 * (1 - Math.cos(Math.PI * i / attackFrames));
+    out.left[i] *= gain;
+    out.right[i] *= gain;
+  }
   return out;
 }
 

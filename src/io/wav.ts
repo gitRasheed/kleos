@@ -231,12 +231,15 @@ function decodeAudio(bytes: Uint8Array, recipeFormats = false): DecodedAudio {
   };
 }
 
-export function readWavFile(filePath: string): AudioBufferData {
+function wavBytes(filePath: string): Uint8Array {
   if (!fs.existsSync(filePath)) {
     throw new WavError('FILE_NOT_FOUND', `File not found: ${filePath}`);
   }
-  const bytes = fs.readFileSync(filePath);
-  return decodeWav(bytes);
+  return fs.readFileSync(filePath);
+}
+
+export function readWavFile(filePath: string): AudioBufferData {
+  return decodeWav(wavBytes(filePath));
 }
 
 function quantizePcm16(sample: number): number {
@@ -331,7 +334,7 @@ export function encodeDitheredWav(audio: Audio, bitDepth: BitDepth = 24): Uint8A
 }
 
 export function readWav(file: string): DecodedAudio {
-  return decodeAudio(fs.readFileSync(file));
+  return decodeAudio(wavBytes(file));
 }
 
 export function writeWav(file: string, audio: Audio, bitDepth: BitDepth = 24): void {

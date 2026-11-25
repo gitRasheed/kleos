@@ -34,6 +34,8 @@ Recipes support sine, triangle, square, saw, noise and FM voices. One-shot voice
 | `batch recipes --out out/batch --summary` | Renders and checks recipes and checks existing WAVs in the input directory. Recipe kind supplies the loop flag. |
 | `mix-check --mix out/shot.wav:-3,out/shot.wav:-6@0.1` | Checks summed headroom at the stated gains and offsets. All inputs must share a sample rate. |
 
+All WAV check profiles analyze samples at the file’s recorded rate. The mains-hum check requires a persistent 50 or 60 Hz line of at least −55 dBFS.
+
 The loudness report includes BS.1770 integrated LUFS, momentary and short-term maxima, 4× true peak, EBU Tech 3342 loudness range (`lraLu`), peak-to-loudness ratio (`plrDb`) and sample peak relative to pooled RMS (`crestFactorDb`). Unavailable measurements are `null`. `FLAT_TOP_CLIPPING` detects repeated flat peaks even when subsequent gain reduction places them below full scale.
 
 Exit 0 means the command succeeded. Exit 1 reports a failed verdict, including an invalid score passed to `validate`. Exit 2 reports an input or execution error. `check --strict` promotes advisory findings to failures.
@@ -98,7 +100,7 @@ Open `out/audition/index.html` directly in a browser. The page embeds the WAVs a
 
 ## Develop
 
-Run `npm run check` for TypeScript, ESLint and the test suites. The MusicXML schema tests use `xmllint`. The audition test uses Chrome or Chromium through the `CHROME` executable setting. The loudness suite compares with FFmpeg when available. [Working rules](AGENTS.md) · [State machines](STATE_MACHINES.md)
+Run `npm run check` for TypeScript, ESLint and the test suites. The MusicXML schema tests use `xmllint`. The audition test runs when Chrome or Chromium is installed. Set `CHROME` to select an executable. The loudness suite compares with FFmpeg when available. [Working rules](AGENTS.md) · [State machines](STATE_MACHINES.md)
 
 ## License
 
