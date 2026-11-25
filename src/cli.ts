@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
+import { createRequire } from 'node:module';
+import { serveStdio } from './mcp.js';
+import { SCORE_USAGE, scoreCommand } from './score/commands.js';
+import { checkFile } from './score/ops.js';
+import { readProject } from './tools.js';
+import { parseProfile } from './ears/profiles.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkAudio, DEFAULT_LOOP_DISCONTINUITY_RATIO, DEFAULT_THRESHOLDS } from './analyze.js';
-import { checkMix, MIX_THRESHOLD_KEYS, MixError, mixStems, parseMixFlag, parseMixManifest, type MixSpec } from './mix.js';
-import { writeInspectionPngs } from './png.js';
-import { errorRow, formatSummaryTable, summaryRow, type SummaryRow } from './summary.js';
-import { RecipeError, renderRecipe, validateRecipe } from './synth.js';
+import { checkAudio, DEFAULT_LOOP_DISCONTINUITY_RATIO, DEFAULT_THRESHOLDS } from './ears/check.js';
+import { checkMix, MIX_THRESHOLD_KEYS, MixError, mixStems, parseMixFlag, parseMixManifest, type MixSpec } from './ears/mix.js';
+import { writeInspectionPngs } from './io/png.js';
+import { errorRow, formatSummaryTable, summaryRow, type SummaryRow } from './ears/summary.js';
+import { RecipeError, renderRecipe, validateRecipe } from './recipe/synth.js';
 import { THRESHOLD_KEYS, WavError, type AudioBufferData, type CheckReport, type CheckThresholds } from './types.js';
-import { decodeWav, encodeWav, readWavFile } from './wav.js';
+import { decodeWav, encodeWav, readWavFile } from './io/wav.js';
 
 const KNOWN_THRESHOLD_KEYS: ReadonlySet<string> = new Set(THRESHOLD_KEYS);
 
@@ -22,9 +29,12 @@ function usage(): string {
   return [
     'Usage:',
     '  agent-audio render <recipe.json> --out <file.wav>',
-    '  agent-audio check <file.wav> [--loop] [--strict] [--summary] [--png <dir>] [--out <report.json>] [--thresholds <json | file.json>]',
+    '  agent-audio check <file.wav> [--profile raw|music|sfx|ui|ambience] [--project <score.json>] [--require-rolloff] [--bpm N] [--loop] [--strict] [--summary] [--png <dir>] [--out <report.json>] [--thresholds <json | file.json>]',
     '  agent-audio batch <dir> --out <dir> [--loop] [--strict] [--summary] [--png <dir>] [--thresholds <json | file.json>]',
     '  agent-audio mix-check <manifest.json> | --mix <a.wav:gainDb[@offsetS],...> [--out <report.json>] [--wav <mix.wav>] [--png <dir>] [--thresholds <json | file.json>]',
+    '  agent-audio gate is an alias for check',
+    '  agent-audio skill install [--project]',
+    SCORE_USAGE,
     '  agent-audio --help',
     '',
     'Exit codes: 0 pass, 1 gate fail, 2 input/tool error',
@@ -103,20 +113,23 @@ function writeWav(file: string, audio: AudioBufferData): Uint8Array {
   return bytes;
 }
 
-function renderRecipeFile(recipePath: string): { readonly id: string; readonly kind: string; readonly audio: AudioBufferData } {
-  const recipe = validateRecipe(JSON.parse(fs.readFileSync(recipePath, 'utf8')) as unknown);
+function renderRecipeData(data: unknown): { readonly id: string; readonly kind: string; readonly audio: AudioBufferData } {
+  const recipe = validateRecipe(data);
   return { id: recipe.id, kind: recipe.kind, audio: renderRecipe(recipe) };
 }
 
 function runRender(args: readonly string[]): number {
-  const { positional, flags } = parseCommandArgs(args, new Set(['--out']), new Set());
-  const recipePath = positional[0];
-  const outPath = flags.get('--out');
-  if (positional.length !== 1 || recipePath === undefined || typeof outPath !== 'string') {
+  const parsed = parseCommandArgs(args, new Set(['--out', '--bit-depth', '--repeats', '--stems-dir', '--layers', '--solo', '--tracks']), new Set());
+  const source = parsed.positional[0];
+  const outPath = parsed.flags.get('--out');
+  if (parsed.positional.length !== 1 || source === undefined || typeof outPath !== 'string') {
     process.stderr.write(`${usage()}\n`);
     return 2;
   }
-  const { id, kind, audio } = renderRecipeFile(recipePath);
+  const data: unknown = JSON.parse(fs.readFileSync(source, 'utf8'));
+  if (typeof data === 'object' && data !== null && 'format' in data) return scoreCommand('render', args);
+  if (parsed.flags.size !== 1) throw new Error('Recipe render accepts only --out');
+  const { id, kind, audio } = renderRecipeData(data);
   const bytes = writeWav(outPath, audio);
   const frames = audio.channels[0]?.length ?? 0;
   process.stdout.write(
@@ -164,21 +177,26 @@ function stringFlag(flags: ReadonlyMap<string, string | true>, name: string): st
 function runCheck(args: readonly string[]): number {
   const { positional, flags } = parseCommandArgs(
     args,
-    new Set(['--png', '--out', '--thresholds']),
-    new Set(['--loop', '--strict', '--summary']),
+    new Set(['--png', '--png-dir', '--out', '--thresholds', '--profile', '--category', '--project', '--bpm', '--beats-per-bar']),
+    new Set(['--loop', '--strict', '--summary', '--require-rolloff']),
   );
   const wavPath = positional[0];
   if (positional.length !== 1 || wavPath === undefined) {
     process.stderr.write(`${usage()}\n`);
     return 2;
   }
-  const options: GateOptions = {
-    loop: flags.get('--loop') === true,
-    strict: flags.get('--strict') === true,
+  const project = stringFlag(flags, '--project');
+  const profile = stringFlag(flags, '--profile') ?? stringFlag(flags, '--category');
+  const pngDir = stringFlag(flags, '--png') ?? stringFlag(flags, '--png-dir');
+  const report = checkFile(wavPath, project === undefined ? null : readProject(project), {
+    ...(profile === undefined ? {} : { profile: parseProfile(profile) }),
+    ...(flags.has('--loop') ? { loop: true } : {}),
+    ...(flags.has('--bpm') ? { bpm: Number(flags.get('--bpm')) } : {}),
+    ...(flags.has('--beats-per-bar') ? { beatsPerBar: Number(flags.get('--beats-per-bar')) } : {}),
+    ...(pngDir === undefined ? {} : { pngDir }),
+    strict: flags.has('--strict'), requireRolloff: flags.has('--require-rolloff'),
     thresholds: parseThresholds(stringFlag(flags, '--thresholds')),
-    pngDir: stringFlag(flags, '--png'),
-  };
-  const report = gate(readWavFile(wavPath), wavPath, options);
+  });
   const outJson = stringFlag(flags, '--out');
   if (outJson !== undefined) {
     writeJson(outJson, report);
@@ -230,7 +248,7 @@ function batchOne(dir: string, name: string, outDir: string, options: GateOption
     let wav = source;
     let loop = options.loop;
     if (isRecipe) {
-      const rendered = renderRecipeFile(source);
+      const rendered = renderRecipeData(JSON.parse(fs.readFileSync(source, 'utf8')) as unknown);
       loop = rendered.kind === 'loop';
       wav = path.join(outDir, `${base}.wav`);
       // Gate the quantised file on disk, so batch and check agree on it.
@@ -325,7 +343,7 @@ function runMixCheck(args: readonly string[]): number {
 }
 
 export function main(argv: readonly string[]): number {
-  if (argv.includes('--help') || argv.includes('-h')) {
+  if (argv[0] === 'help' || argv.includes('--help') || argv.includes('-h')) {
     process.stdout.write(`${usage()}\n`);
     return 0;
   }
@@ -334,7 +352,7 @@ export function main(argv: readonly string[]): number {
     if (cmd === 'render') {
       return runRender(argv.slice(1));
     }
-    if (cmd === 'check') {
+    if (cmd === 'check' || cmd === 'gate') {
       return runCheck(argv.slice(1));
     }
     if (cmd === 'batch') {
@@ -343,6 +361,21 @@ export function main(argv: readonly string[]): number {
     if (cmd === 'mix-check') {
       return runMixCheck(argv.slice(1));
     }
+    if (cmd === 'mcp') {
+      serveStdio();
+      return 0;
+    }
+    if (cmd === 'skill') {
+      if (argv[1] !== 'install' || argv.slice(2).some((arg) => arg !== '--project')) throw new Error('Usage: agent-audio skill install [--project]');
+      const root = argv.includes('--project') ? process.cwd() : os.homedir();
+      const dir = path.join(root, '.agents', 'skills', 'agent-audio');
+      const pkg = path.dirname(createRequire(import.meta.url).resolve('agent-audio/package.json'));
+      fs.mkdirSync(dir, { recursive: true });
+      fs.copyFileSync(path.join(pkg, 'SKILL.md'), path.join(dir, 'SKILL.md'));
+      process.stdout.write(`${path.join(dir, 'SKILL.md')}\n`);
+      return 0;
+    }
+    if (cmd !== undefined) return scoreCommand(cmd, argv.slice(1));
     process.stderr.write(`${usage()}\n`);
     return 2;
   } catch (err) {
@@ -356,5 +389,5 @@ const isEntry =
   fs.existsSync(process.argv[1]) &&
   fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
 if (isEntry) {
-  process.exit(main(process.argv.slice(2)));
+  process.exitCode = main(process.argv.slice(2));
 }

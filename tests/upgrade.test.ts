@@ -32,7 +32,7 @@ import {
   rowAtFreq,
   spectrogramFreqAxis,
   timeTicks,
-} from '../src/plot.js';
+} from '../src/io/plot.js';
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLI = path.join(PKG_ROOT, 'dist', 'cli.js');

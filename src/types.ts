@@ -1,3 +1,6 @@
+import type { Profile, HumMetrics, SeamMetrics } from './ears/profiles.js';
+import type { DecodedAudio } from './io/wav.js';
+
 export type SupportedSampleRate = 44100 | 48000;
 export type SupportedChannels = 1 | 2;
 export type SupportedBitFormat = 'pcm16' | 'pcm24' | 'float32';
@@ -31,6 +34,15 @@ export type FindingSeverity = 'fail' | 'warn' | 'info';
 
 export const FINDING_CODES = [
   'SILENT_AUDIO',
+  'FLAT_TOP_CLIPPING',
+  'SILENT_CHANNEL',
+  'MAINS_HUM',
+  'SPECTRAL_DULL',
+  'SPECTRAL_HARSH',
+  'SPECTRAL_ROLLOFF',
+  'LOOP_LENGTH',
+  'LOOP_LEVEL_JUMP',
+  'LOOP_BAR_SEAM',
   'TRUE_PEAK_EXCEEDED',
   'FULL_SCALE_SAMPLES',
   'DC_OFFSET',
@@ -68,6 +80,7 @@ export interface ChannelMetrics {
   readonly rmsDbfs: number | null;
   readonly dcOffset: number;
   readonly fullScaleSamples: number;
+  readonly flatTopSamples: number;
   readonly fullScaleMaxRun: number;
   readonly startEdgePeak: number;
   readonly endEdgePeak: number;
@@ -91,6 +104,7 @@ export interface LoudnessMetrics {
   readonly integratedLufs: number | null;
   readonly integratedReason: string | null;
   readonly momentaryMaxLufs: number | null;
+  readonly shortTermMaxLufs: number | null;
   readonly momentaryPadded: boolean;
   readonly truePeakDbtp: number | null;
   readonly truePeakChannel: number | null;
@@ -116,6 +130,13 @@ export interface StereoMetrics {
 
 export const THRESHOLD_KEYS = [
   'maxTruePeakDbtp',
+  'humRatioDb',
+  'minCentroidHz',
+  'maxCentroidHz',
+  'minRolloff85Hz',
+  'maxRolloff85Hz',
+  'maxSeamStep',
+  'seamVsBarRatio',
   'maxDcOffset',
   'maxFullScaleSamples',
   'maxLeadingSilenceS',
@@ -142,12 +163,15 @@ export interface CheckReport {
   readonly schemaVersion: 'agent-audio/check/v1';
   readonly ok: boolean;
   readonly file: string;
+  readonly profile: Profile;
+  readonly hum: readonly HumMetrics[];
+  readonly seam: SeamMetrics | null;
   readonly loopChecked: boolean;
   readonly referenceLevelDbfs: number | null;
   readonly format: {
-    readonly sampleRateHz: SupportedSampleRate;
-    readonly channels: SupportedChannels;
-    readonly encoding: SupportedBitFormat;
+    readonly sampleRateHz: number;
+    readonly channels: number;
+    readonly encoding: DecodedAudio['format'];
     readonly frames: number;
     readonly durationS: number;
   };

@@ -1,11 +1,11 @@
 ---
 name: agent-audio
-description: Render deterministic game SFX and loops from plain JSON recipes, run objective BS.1770-4 / integrity / loop-seam gates on any supported WAV or on a whole folder, check the headroom of several cues mixed together, and inspect labelled waveform/spectrogram PNGs before shipping audio.
+description: Render deterministic SFX, loops and orchestral scores from JSON, run objective BS.1770-4 / integrity / loop-seam gates on any supported WAV or on a whole folder, check the headroom of several cues mixed together, and inspect labelled waveform/spectrogram PNGs before shipping audio.
 ---
 
 # agent-audio
 
-A zero-dependency TypeScript CLI that renders sound from JSON recipes and gates any WAV with deterministic checks.
+Render a recipe or score to WAV, then check loudness, clipping, stereo balance and loop seams.
 
 ## Run
 
@@ -57,6 +57,30 @@ agent-audio mix-check combat.mix.json --wav out/combat-mix.wav --png out/inspect
 Exit codes: `0` pass, `1` gate failure, `2` invalid input or tool error. `check` and `mix-check` print the JSON report on stdout. Errors print one JSON line on stderr with a stable `code`. `--help` or `-h` prints usage and the threshold keys.
 
 `--strict` on `check` and `batch` turns the advisory warnings into failures.
+
+### Scores and profiles
+
+```sh
+agent-audio render examples/fanfare-overture.daw.json --out out/fanfare.wav --stems-dir out/stems
+agent-audio check out/fanfare.wav --project examples/fanfare-overture.daw.json --png out/inspect
+agent-audio critique examples/fanfare-overture.daw.json
+agent-audio export-midi examples/fanfare-overture.daw.json --out out/fanfare.mid
+```
+
+Use `init` to start a score, then add tracks, clips and notes. Each track has an instrument, gain, pan, effects and a role such as lead or bass. For a loop, `render --repeats 2` also writes two passes so you can hear the wrap. Use `--solo <track-id>` to inspect an instrument. The critic scores features of the arrangement and suggests edits. Pass `--min` when you want a minimum score to determine the exit status.
+
+`check` and `gate` take `--profile raw|music|sfx|ui|ambience`. The default is raw without a project. A project supplies the tempo, loop flag and music target (or the sfx profile for an SFX project). Music allows opening rests. To limit their duration, supply `maxLeadingSilenceS`. Music treats low rolloff as advisory unless you pass `--require-rolloff`, an explicit minimum rolloff, or `--strict`.
+
+| Finding | Measurement |
+| --- | --- |
+| `FLAT_TOP_CLIPPING` | Repeated plateaus at the channel peak after a signal reaches a clipping rail. Lowering the gain preserves the plateaus. |
+| `SILENT_CHANNEL` | One channel falls below −70 dBFS RMS while another plays. |
+| `MAINS_HUM` | A stationary 50 or 60 Hz line above nearby frequencies. `humRatioDb` sets the required prominence. |
+| `SPECTRAL_DULL`, `SPECTRAL_HARSH` | The centroid falls below `minCentroidHz` or exceeds `maxCentroidHz`. |
+| `SPECTRAL_ROLLOFF` | The 85% energy rolloff lies outside `minRolloff85Hz` and `maxRolloff85Hz`. |
+| `LOOP_LENGTH` | The loop length differs from a whole number of bars at the supplied tempo. |
+| `LOOP_BAR_SEAM` | The wrap step exceeds both `maxSeamStep` and `seamVsBarRatio` times a typical bar-line step. |
+| `LOOP_LEVEL_JUMP` | The change in level across the wrap exceeds the changes at interior bar lines. |
 
 ### Batch
 
