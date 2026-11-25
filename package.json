@@ -1,22 +1,28 @@
 {
-  "name": "agent-audio",
+  "name": "kleos",
   "version": "0.2.0",
-  "description": "Headless audio renderer and deterministic listening gate for coding agents.",
+  "description": "Headless DAW, sheet-music engine and audio QA gate for AI coding agents. Render game audio, lint scores, exchange ABC, MusicXML and MIDI, and gate WAVs by LUFS and true peak in CI.",
   "keywords": [
+    "kleos",
     "audio",
-    "sfx",
-    "synth",
-    "loudness",
-    "bs1770",
-    "true-peak",
-    "wav",
-    "agents"
+    "daw",
+    "agent-audio",
+    "agent-daw",
+    "music-theory",
+    "musicxml",
+    "abc-notation",
+    "midi",
+    "sf2",
+    "lufs",
+    "ebu-r128",
+    "mcp",
+    "game-audio",
+    "ci"
   ],
   "license": "MIT",
   "type": "module",
   "bin": {
-    "agent-audio": "./dist/cli.js",
-    "agent-daw": "./dist/cli.js"
+    "kleos": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -59,5 +65,5 @@
     "spessasynth_core": "4.4.12",
     "tonal": "6.10.0"
   },
-  "repository": "https://github.com/gitRasheed/agent-audio.git"
+  "repository": "https://github.com/gitRasheed/kleos.git"
 }

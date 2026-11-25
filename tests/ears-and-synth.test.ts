@@ -171,7 +171,7 @@ describe('listening gate planted defects and loop-seam contracts', () => {
     assert.equal(fadeReport.findings.some((f) => f.code === 'CUT_TAIL'), false);
 
     // Astra regression: invalid recipe fields and invalid CLI flags/thresholds must exit 2.
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-val-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-val-'));
     try {
       const badRecipe = { ...CHIRP, voices: [{ ...CHIRP.voices[0], waveform: 'bogus', pan: 4 }] };
       const badPath = path.join(tmpDir, 'bad.recipe.json');
@@ -226,7 +226,7 @@ describe('deterministic rendering, rounding, and defect-revision workflow', () =
   });
 
   it('renders and gates all three shipped recipes, and proves the leading-silence revision loop via CLI', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-cli-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-cli-'));
     try {
       for (const file of ['cannon-shot.recipe.json', 'lock-chirp.recipe.json', 'combat-loop.recipe.json']) {
         const recipePath = path.join(RECIPES_DIR, file);

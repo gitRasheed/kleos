@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "agent-audio/recipe/v1",
+  "schemaVersion": "kleos/recipe/v1",
   "kind": "one-shot",
   "id": "lock-chirp",
   "sampleRate": 48000,

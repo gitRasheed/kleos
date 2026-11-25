@@ -163,7 +163,7 @@ export type ThresholdKey = (typeof THRESHOLD_KEYS)[number];
 export type CheckThresholds = { readonly [K in ThresholdKey]?: number };
 
 export interface CheckReport {
-  readonly schemaVersion: 'agent-audio/check/v1';
+  readonly schemaVersion: 'kleos/check/v1';
   readonly ok: boolean;
   readonly file: string;
   readonly profile: Profile;
@@ -273,7 +273,7 @@ export interface MasterBusOptions {
 }
 
 export interface OneShotRecipe extends MasterBusOptions {
-  readonly schemaVersion: 'agent-audio/recipe/v1';
+  readonly schemaVersion: 'kleos/recipe/v1' | 'agent-audio/recipe/v1';
   readonly kind: 'one-shot';
   readonly id: string;
   readonly sampleRate?: SupportedSampleRate;
@@ -285,7 +285,7 @@ export interface OneShotRecipe extends MasterBusOptions {
 }
 
 export interface LoopRecipe extends MasterBusOptions {
-  readonly schemaVersion: 'agent-audio/recipe/v1';
+  readonly schemaVersion: 'kleos/recipe/v1' | 'agent-audio/recipe/v1';
   readonly kind: 'loop';
   readonly id: string;
   readonly sampleRate?: SupportedSampleRate;

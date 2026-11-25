@@ -320,7 +320,7 @@ function flybyTrack() {
 }
 
 const project = {
-  format: 'agent-daw/v1',
+  format: 'kleos/score/v1',
   id: 'fanfare-overture',
   title: 'Fanfare Overture (original, in a heroic space-opera and rock-orchestral style)',
   kind: 'loop',

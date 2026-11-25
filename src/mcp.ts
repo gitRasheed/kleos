@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import readline from 'node:readline';
 import { TOOLS, ToolError, findTool } from './tools.js';
 
-const { name, version } = createRequire(import.meta.url)('agent-audio/package.json') as { name: string; version: string };
+const { name, version } = createRequire(import.meta.url)('kleos/package.json') as { name: string; version: string };
 export const SERVER_INFO = { name, version };
 const DEFAULT_PROTOCOL = '2025-06-18';
 

@@ -27,7 +27,7 @@ function usage(): string {
     return `  ${key.padEnd(keyWidth)}  ${DEFAULT_THRESHOLDS[key] ?? loopDefault}`;
   });
   return [
-    'Usage: agent-audio <command> [options]',
+    'Usage: kleos <command> [options]',
     '',
     'Audio checks',
     '  check <file.wav> [--profile raw|music|sfx|ui|ambience] [--project <score.json>] [--require-rolloff] [--bpm N] [--loop] [--strict] [--summary] [--png <dir>] [--out <report.json>] [--thresholds <json | file.json>]',
@@ -371,14 +371,14 @@ export function main(argv: readonly string[]): number {
       return 0;
     }
     if (cmd === 'skill') {
-      if (argv[1] !== 'install' || argv.slice(2).some((arg) => arg !== '--project')) throw new Error('Usage: agent-audio skill install [--project]');
+      if (argv[1] !== 'install' || argv.slice(2).some((arg) => arg !== '--project')) throw new Error('Usage: kleos skill install [--project]');
       const root = argv.includes('--project') ? process.cwd() : os.homedir();
-      const pkg = path.dirname(createRequire(import.meta.url).resolve('agent-audio/package.json'));
+      const pkg = path.dirname(createRequire(import.meta.url).resolve('kleos/package.json'));
       for (const agent of ['.agents', '.claude']) {
-        const dir = path.join(root, agent, 'skills', 'agent-audio');
+        const dir = path.join(root, agent, 'skills', 'kleos');
         fs.mkdirSync(dir, { recursive: true });
         const target = path.join(dir, 'SKILL.md');
-        fs.copyFileSync(path.join(pkg, 'skills', 'agent-audio', 'SKILL.md'), target);
+        fs.copyFileSync(path.join(pkg, 'skills', 'kleos', 'SKILL.md'), target);
         process.stdout.write(target + '\n');
       }
       return 0;

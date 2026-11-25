@@ -4,7 +4,12 @@ import { INSTRUMENT_DEFS } from '../theory/instruments.js';
 import fs from 'node:fs';
 import { SAMPLE_RATE } from './dsp.js';
 
-export const FORMAT = 'agent-daw/v1';
+export const FORMAT = 'kleos/score/v1';
+type ProjectFormat = typeof FORMAT | 'agent-audio/score/v1' | 'agent-daw/v1';
+
+export function isProjectFormat(value: unknown): value is ProjectFormat {
+  return value === FORMAT || value === 'agent-audio/score/v1' || value === 'agent-daw/v1';
+}
 
 export const ARTICULATIONS = ['normal', 'legato', 'staccato', 'accent', 'sforzando'] as const;
 export const NATIVE_INSTRUMENTS = [
@@ -142,7 +147,7 @@ export interface MasterConfig {
 export interface Project {
   readonly buses?: readonly MixBus[];
   readonly sourceAbc?: string;
-  readonly format: typeof FORMAT;
+  readonly format: ProjectFormat;
   readonly id: string;
   readonly title: string;
   readonly kind: ProjectKind;
@@ -575,7 +580,8 @@ export function parseProject(raw: unknown): ParseResult<Project> {
   const ctx = new Ctx();
   if (!isObj(raw)) return { ok: false, errors: [{ path: '$', message: 'project must be a JSON object' }], warnings: [] };
   keys(ctx, raw, '$', ['format', 'id', 'title', 'kind', 'tempo', 'key', 'bars', 'loop', 'sampleRate', 'master', 'sections', 'patterns', 'tracks', 'buses', 'sourceAbc']);
-  if (raw.format !== FORMAT) ctx.error('$.format', `must be "${FORMAT}"`);
+  const format = isProjectFormat(raw.format) ? raw.format : undefined;
+  if (!format) ctx.error('$.format', `must be "${FORMAT}"`);
   const tempoRaw = isObj(raw.tempo) ? raw.tempo : {};
   keys(ctx, tempoRaw, '$.tempo', ['bpm', 'beatsPerBar', 'beatUnit']);
   const tempo = {
@@ -673,7 +679,7 @@ export function parseProject(raw: unknown): ParseResult<Project> {
   const project: Project = {
     ...(raw.buses === undefined ? {} : { buses }),
     ...(raw.sourceAbc !== undefined ? { sourceAbc: str(ctx, raw, 'sourceAbc', '$') } : {}),
-    format: FORMAT,
+    format: format ?? FORMAT,
     id: str(ctx, raw, 'id', '$', 'untitled'),
     title: typeof raw.title === 'string' ? raw.title : str(ctx, raw, 'id', '$', 'untitled'),
     kind,

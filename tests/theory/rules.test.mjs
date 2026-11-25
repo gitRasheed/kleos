@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { INSTRUMENT_DEFS, lintScore } from 'agent-audio'
+import { INSTRUMENT_DEFS, lintScore } from 'kleos'
 
 const event = (ticks, ...pitches) => ({ ticks, pitches })
 const line = (id, ...events) => ({ id, voice: id, instrument: 'piano', dynamic: 'p', bars: [events] })

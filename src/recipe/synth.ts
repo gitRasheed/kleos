@@ -493,7 +493,7 @@ export function validateRecipe(raw: unknown): AudioRecipe {
     throw new RecipeError('Recipe must be a JSON object');
   }
   const obj = raw as Record<string, unknown>;
-  if (obj['schemaVersion'] !== 'agent-audio/recipe/v1') {
+  if (obj['schemaVersion'] !== 'kleos/recipe/v1' && obj['schemaVersion'] !== 'agent-audio/recipe/v1') {
     throw new RecipeError(`Unsupported recipe schemaVersion: ${String(obj['schemaVersion'])}`);
   }
   if (typeof obj['id'] !== 'string' || obj['id'].trim().length === 0) {

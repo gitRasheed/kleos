@@ -111,7 +111,7 @@ test('MCP stdio server: handshake, the audio and score tools, and a compose-rend
 
 async function roundTrip(c: McpClient, dir: string, proj: string): Promise<void> {
   const init = await c.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
-  assert.equal((init.result as { serverInfo: { name: string } }).serverInfo.name, 'agent-audio');
+  assert.equal((init.result as { serverInfo: { name: string } }).serverInfo.name, 'kleos');
   c.notify('notifications/initialized');
   const list = await c.request('tools/list');
   const names = (list.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort();

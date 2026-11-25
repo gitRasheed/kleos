@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { lintScore } from 'agent-audio'
+import { lintScore } from 'kleos'
 
 const track = (id, instrument, notes) => ({
   id,

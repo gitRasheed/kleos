@@ -24,6 +24,7 @@ for (const score of ['beethoven', 'mozart', 'piano-scale']) {
     cli('render', file, '--out', wav);
     const report = JSON.parse(cli('check', wav, '--project', file));
     assert.equal(report.ok, true);
+    assert.equal(report.schemaVersion, 'kleos/check/v1');
     assert.equal(report.thresholds.maxClickRatio, 25);
   });
 }

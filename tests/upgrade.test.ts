@@ -38,7 +38,7 @@ const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const CLI = path.join(PKG_ROOT, 'dist', 'cli.js');
 const FIXTURES = path.join(PKG_ROOT, 'tests', 'fixtures');
 const SR = 48000;
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-upgrade-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-upgrade-'));
 after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 
 function has(report: CheckReport, code: FindingCode): boolean {

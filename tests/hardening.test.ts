@@ -313,7 +313,7 @@ describe('recipe schema rejects unknown keys', () => {
 
   for (const [key, where, recipe] of cases) {
     it(`exits 2 naming "${key}" at ${where}`, () => {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-schema-'));
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-schema-'));
       try {
         const recipePath = path.join(tmpDir, 'bad.recipe.json');
         const wavPath = path.join(tmpDir, 'bad.wav');
@@ -384,7 +384,7 @@ describe('stereo phase', () => {
   });
 
   it('honours a minStereoCorrelation override through the CLI', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-phase-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-phase-'));
     try {
       const wavPath = path.join(tmpDir, 'antiphase.wav');
       fs.writeFileSync(wavPath, encodeWav([left, inverted], SR, 'float32'));
@@ -421,7 +421,7 @@ describe('spectral metrics cover the whole file', () => {
 });
 
 describe('SKILL.md', () => {
-  const skill = fs.readFileSync(path.join(PKG_ROOT, 'skills', 'agent-audio', 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(PKG_ROOT, 'skills', 'kleos', 'SKILL.md'), 'utf8');
 
   it('makes every finding code discoverable through the CLI help', () => {
     const help = runCli(['--help']);

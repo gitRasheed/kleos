@@ -842,7 +842,7 @@ export function checkAudio(
   }
 
   return {
-    schemaVersion: 'agent-audio/check/v1',
+    schemaVersion: 'kleos/check/v1',
     ok: findings.every((f) => f.severity !== 'fail'),
     profile, hum, seam,
     file: fileLabel,

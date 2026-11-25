@@ -2,7 +2,7 @@ import { Note, Scale } from 'tonal';
 import { INSTRUMENT_DEFS, type Instrument } from '../theory/instruments.js';
 import type { Event, Score, Track } from '../theory/types.js';
 import { PPQ } from './midi.js';
-import { expandTrackNotes, FORMAT, parseProject, type PlacedNote, type Project, type Track as ProjectTrack } from './project.js';
+import { expandTrackNotes, isProjectFormat, parseProject, type PlacedNote, type Project, type Track as ProjectTrack } from './project.js';
 
 function trackBars(project: Project, track: ProjectTrack, ticksPerBar: number, spell: (midi: number) => string): Event[][] {
   const changes = new Map<number, { on: PlacedNote[]; off: PlacedNote[] }>();
@@ -93,12 +93,12 @@ export function parseLintScore(raw: unknown, override?: unknown): Score {
   const declared = raw.style === undefined ? 'free' : raw.style;
   const style = override === undefined ? declared : override;
   if (style !== 'free' && style !== 'strict') throw new Error('style must be strict or free');
-  if (format !== undefined && format !== FORMAT && format !== 'agent-audio/score/v1') throw new Error(`Unknown score format: ${String(format)}`);
-  if (format === FORMAT || (format === 'agent-audio/score/v1' && !('ticksPerBeat' in raw))) {
+  if (format !== undefined && !isProjectFormat(format)) throw new Error(`Unknown score format: ${String(format)}`);
+  if (format === 'agent-daw/v1' || (format !== undefined && !('ticksPerBeat' in raw))) {
     const project = { ...raw };
     delete project.schemaVersion;
     delete project.style;
-    const parsed = parseProject({ ...project, format: FORMAT });
+    const parsed = parseProject({ ...project, format });
     if (!parsed.ok) throw new Error(parsed.errors.map(e => `${e.path}: ${e.message}`).join('\n'));
     return projectToTheoryScore(parsed.value, style);
   }

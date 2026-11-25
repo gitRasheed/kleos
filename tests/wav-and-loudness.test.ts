@@ -160,7 +160,7 @@ describe('WAV support matrix and error contracts', () => {
   });
 
   it('decodes WAVE_FORMAT_EXTENSIBLE (tag 0xFFFE) PCM24 WAVs produced by ffmpeg', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-ext-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-ext-'));
     try {
       const outPath = path.join(tmpDir, 'ext24.wav');
       const res = spawnSync(
@@ -288,7 +288,7 @@ describe('BS.1770-4 loudness and 4x true peak contracts', () => {
   });
 
   it('matches ffmpeg ebur128 within 0.25 LU at both 44.1 kHz and 48 kHz', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-ff-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-ff-'));
     try {
       for (const sr of [44100, 48000] as const) {
         const ch = makeSine(1000, 1.2, sr, 0.3);

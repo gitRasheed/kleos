@@ -18,7 +18,7 @@ export function track(id: string, instrument: unknown, notes: readonly Record<st
 }
 
 export function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-daw-test-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-test-'));
 }
 
 export function sine(freq: number, seconds: number, amp = 0.5, channels = 2): Audio {

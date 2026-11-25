@@ -98,7 +98,7 @@ function commit(a: Args, r: ParseResult<Project>): ToolResult {
   return { ok: true, data: { project: reqStr(a, 'project'), warnings: r.warnings, summary: dump(r.value) } };
 }
 
-const projectArg = { project: s('Path to the agent-daw/v1 project JSON file') };
+const projectArg = { project: s('Path to the kleos/score/v1 project JSON file') };
 const trackArg = { ...projectArg, trackId: s('Track id') };
 
 const checkTool: Tool = {
@@ -120,7 +120,7 @@ const checkTool: Tool = {
 export const TOOLS: readonly Tool[] = [
   {
     name: 'project_init',
-    description: 'Create a new agent-daw/v1 project file. Pick a tempo whose loop is an integer number of frames (120 BPM is always safe).',
+    description: 'Create a new kleos/score/v1 project file. Pick a tempo whose loop is an integer number of frames (120 BPM is always safe).',
     inputSchema: schema({ ...projectArg, id: s('Project id'), title: s('Title'), kind: { type: 'string', enum: KINDS }, bpm: n('Tempo'), beatsPerBar: n('Beats per bar'), bars: n('Length in bars'), tonic: s('Key tonic, e.g. D or Bb'), mode: { type: 'string', enum: Object.keys(MODES) }, targetLufs: n('Master loudness target'), overwrite: { type: 'boolean' } }, ['project', 'id']),
     run: (a) => {
       const file = reqStr(a, 'project');

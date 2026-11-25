@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, URL } from 'node:url'
-import { handleMessage, lintScore, parseLintScore } from 'agent-audio'
+import { handleMessage, lintScore, parseLintScore } from 'kleos'
 
 const cli = fileURLToPath(new URL('../../dist/cli.js', import.meta.url))
 const note = (midi, startBeat, durationBeats) => ({ midi, startBeat, durationBeats })
@@ -19,7 +19,7 @@ const project = {
 }
 
 test('DAW clips preserve rests, overlap, barlines, concert pitch and transposed repeats', () => {
-  for (const format of ['agent-daw/v1', 'agent-audio/score/v1']) {
+  for (const format of ['agent-daw/v1', 'agent-audio/score/v1', 'kleos/score/v1']) {
     const score = parseLintScore({ ...project, format })
     const findings = lintScore(score)
     assert.deepEqual(findings.filter(f => f.code === 'POLYPHONY').map(f => f.where), [
@@ -40,13 +40,14 @@ test('DAW spelling preserves the leading tone in a sharp key', () => {
 })
 
 test('CLI and MCP distinguish warnings, error findings, and invalid input', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-audio-lint-'))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-lint-'))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   const file = path.join(dir, 'score.json')
   const tracks = ['C4', 'E4'].map(pitch => ({
     id: pitch, voice: pitch, instrument: 'piano', dynamic: 'p', bars: [[{ ticks: 4, pitches: [pitch] }]],
   }))
   const score = { format: 'agent-audio/score/v1', style: 'strict', ticksPerBeat: 1, beatsPerBar: [4], tracks }
+  assert.deepEqual(parseLintScore({ ...score, format: 'kleos/score/v1' }).tracks, parseLintScore(score).tracks)
   fs.writeFileSync(file, JSON.stringify(score))
   const run = (...args) => spawnSync(process.execPath, [cli, 'lint', file, ...args], { encoding: 'utf8' })
   const call = (args) => handleMessage({ id: 1, method: 'tools/call', params: { name: 'lint', arguments: { score: file, ...args } } }).result

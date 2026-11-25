@@ -252,7 +252,7 @@ const numParam = (p: Readonly<Record<string, unknown>>, k: string, def?: number)
 };
 
 function withTemp<T>(f: (dir: string) => T): T {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-daw-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-'));
   try {
     return f(dir);
   } finally {
