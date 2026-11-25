@@ -1,9 +1,10 @@
+import { renderMixGraph, type GraphFinding, type MixTrack, type Reduction } from './mixGraph.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderPcmSf2 } from '../notation/sf2Adapter.js';
 import { exportMidi } from './midi.js';
 import { SAMPLE_RATE, addInto, clamp, dbToGain, gainToDb, hashString, makeRng, midiToHz, panGains, stereo, svfG, svfStep, type Stereo } from './dsp.js';
-import { applyFx, type FxContext } from './fx.js';
+import { applyFx, compressWithMeter, type FxContext } from './fx.js';
 import { INSTRUMENT_MODELS } from './instruments/index.js';
 import { integratedLufs } from '../ears/loudness.js';
 import { masterBus, masterStem, type MasterStats } from './master.js';
@@ -11,6 +12,7 @@ import { expandTrackNotes, loopFrames, type AutomationLane, type Layer, type Pro
 
 export interface RenderOptions {
   readonly projectDir?: string;
+  readonly captureTracks?: boolean;
   // Only tracks on these layers are rendered; default is every layer.
   readonly layers?: readonly Layer[];
   // Only these track ids are rendered, muted or not; default is every unmuted track.
@@ -21,6 +23,11 @@ export interface RenderOptions {
 
 export interface RenderResult {
   readonly mix: Stereo;
+  readonly busStems: ReadonlyMap<string, Stereo>;
+  readonly trackStems: ReadonlyMap<string, Stereo>;
+  readonly auditionStems: ReadonlyMap<string, Stereo>;
+  readonly reductions: readonly Reduction[];
+  readonly findings: readonly GraphFinding[];
   readonly stems: Readonly<Partial<Record<Layer, Stereo>>>;
   readonly frames: number;
   readonly loop: boolean;
@@ -132,7 +139,7 @@ function balance(pan: number): readonly [number, number] {
   return [l / Math.SQRT1_2, r / Math.SQRT1_2].map((g) => Math.min(1.25, g)) as [number, number];
 }
 
-function processTrack(p: Project, t: Track, dry: Stereo): Stereo {
+function processTrack(p: Project, t: Track, dry: Stereo, reductions: Reduction[]): Stereo {
   const n = dry.left.length;
   const sr = p.sampleRate;
   const spb = secondsPerBeat(p);
@@ -156,7 +163,10 @@ function processTrack(p: Project, t: Track, dry: Stereo): Stereo {
     }
   }
   const ctx: FxContext = { sampleRate: sr, secondsPerBeat: spb, loopFrames: p.loop ? n : null };
-  for (const fx of t.fx) applyFx(work, fx, ctx);
+  for (const [insert, fx] of t.fx.entries()) {
+    if (fx.type === 'compressor') reductions.push({ id: t.id, insert, ...compressWithMeter(work, fx, ctx) });
+    else applyFx(work, fx, ctx);
+  }
   for (const lane of t.automation.filter((a) => a.param === 'volume')) {
     for (let i = 0; i < work.left.length; i += 1) {
       const g = dbToGain(automationValue(lane, beatOf(i)));
@@ -174,33 +184,40 @@ function processTrack(p: Project, t: Track, dry: Stereo): Stereo {
   return out;
 }
 
-export function renderTrack(p: Project, t: Track, tailS = 3, projectDir = '.'): { readonly audio: Stereo; readonly notes: number } {
+export function renderTrack(p: Project, t: Track, tailS = 3, projectDir = '.') {
   const frames = projectFrames(p, tailS);
   const dry = renderDry(p, t, frames, projectDir);
-  return { audio: processTrack(p, t, dry.buf), notes: dry.notes };
+  const reductions: Reduction[] = [];
+  return { audio: processTrack(p, t, dry.buf, reductions), notes: dry.notes, reductions };
 }
 
 export function renderProject(p: Project, opts: RenderOptions = {}): RenderResult {
   const frames = projectFrames(p, opts.tailS ?? 3);
-  const mix = stereo(frames);
+  let mix = stereo(frames);
+  const routed = Boolean(p.buses?.length || p.tracks.some(t => t.to || t.sends?.length || t.solo));
+  const strips: MixTrack[] = [];
+  const trackStems = new Map<string, Stereo>();
+  let auditionStems = trackStems;
+  let busStems = new Map<string, Stereo>();
+  const reductions: Reduction[] = [];
+  let findings: GraphFinding[] = [];
   const stems: Partial<Record<Layer, Stereo>> = {};
   const stats: TrackStats[] = [];
   if (opts.trackIds !== undefined) {
     const unknown = opts.trackIds.filter((id) => !p.tracks.some((t) => t.id === id));
     if (unknown.length > 0) throw new Error(`unknown track ${unknown.join(', ')}; tracks are ${p.tracks.map((t) => t.id).join(', ')}`);
   }
-  for (const t of p.tracks) {
-    const picked = opts.trackIds === undefined ? !t.mute : opts.trackIds.includes(t.id);
-    if (!picked || (opts.layers !== undefined && !opts.layers.includes(t.layer))) continue;
-    const { audio, notes } = renderTrack(p, t, opts.tailS ?? 3, opts.projectDir);
-    const stem = (stems[t.layer] ??= stereo(frames));
+  function meter(t: Track, audio: Stereo, notes: number) {
+    const stem = routed ? undefined : (stems[t.layer] ??= stereo(frames));
     let peak = 0;
     let energy = 0;
     for (let i = 0; i < frames; i += 1) {
-      mix.left[i] += audio.left[i];
-      mix.right[i] += audio.right[i];
-      stem.left[i] += audio.left[i];
-      stem.right[i] += audio.right[i];
+      if (stem) {
+        mix.left[i] += audio.left[i];
+        mix.right[i] += audio.right[i];
+        stem.left[i] += audio.left[i];
+        stem.right[i] += audio.right[i];
+      }
       peak = Math.max(peak, Math.abs(audio.left[i]), Math.abs(audio.right[i]));
       energy += audio.left[i] * audio.left[i] + audio.right[i] * audio.right[i];
     }
@@ -208,15 +225,63 @@ export function renderProject(p: Project, opts: RenderOptions = {}): RenderResul
     const rmsDb = gainToDb(Math.sqrt(energy / Math.max(1, 2 * frames)));
     stats.push({ id: t.id, notes, peak: Number(peak.toFixed(4)), lufs: lufs === null ? null : Number(lufs.toFixed(2)), rmsDbfs: Number.isFinite(rmsDb) ? Number(rmsDb.toFixed(2)) : null });
   }
+  const rendered = new Map<string, { track: Track; notes: number; reductions: Reduction[] }>();
+  for (const t of p.tracks) {
+    const picked = opts.trackIds === undefined ? !t.mute : opts.trackIds.includes(t.id);
+    if ((!picked && !routed) || (opts.layers && !opts.layers.includes(t.layer))) continue;
+    if (!picked) {
+      // A muted solo still closes the other strips.
+      if (t.solo && !opts.trackIds) strips.push({ ...t, audio: stereo(frames), fx: [], mute: true });
+      continue;
+    }
+    const { audio, notes, reductions: meters } = renderTrack(p, routed ? { ...t, gainDb: 0 } : t, opts.tailS ?? 3, opts.projectDir);
+    if (routed) {
+      rendered.set(t.id, { track: t, notes, reductions: meters });
+      strips.push({ ...t, audio, fx: [], mute: false, solo: !opts.trackIds && Boolean(t.solo) });
+    } else {
+      if (opts.captureTracks) trackStems.set(t.id, audio);
+      reductions.push(...meters);
+      meter(t, audio, notes);
+    }
+  }
+  if (routed) {
+    const buses = (p.buses ?? []).map(b => opts.trackIds ? { ...b, solo: false } : b);
+    const ctx: FxContext = {
+      sampleRate: p.sampleRate, secondsPerBeat: secondsPerBeat(p), loopFrames: p.loop ? frames : null,
+    };
+    const graph = renderMixGraph(strips, buses, ctx, frames, opts.captureTracks);
+    mix = graph.mix;
+    busStems = graph.stems;
+    auditionStems = graph.masterInputs;
+    findings = graph.findings;
+    const silence = stereo(frames);
+    function isolatedMix(keep: (id: string) => boolean): Stereo {
+      // Silence at the input preserves every existing solo path and pre-fader send.
+      const isolated = strips.map(strip => keep(strip.id) ? strip : { ...strip, audio: silence });
+      return renderMixGraph(isolated, buses, ctx, frames).mix;
+    }
+    const layers = new Set(Array.from(rendered.values(), entry => entry.track.layer));
+    for (const layer of layers) stems[layer] = layers.size === 1 ? mix : isolatedMix(id => rendered.get(id)?.track.layer === layer);
+    for (const [id, audio] of graph.trackStems) {
+      const entry = rendered.get(id);
+      if (!entry) continue;
+      if (opts.captureTracks) trackStems.set(id, isolatedMix(trackId => trackId === id));
+      meter(entry.track, audio, entry.notes);
+      reductions.push(...entry.reductions);
+    }
+    reductions.push(...graph.reductions);
+  }
   const mastered = masterBus(mix, p.master, p.loop, p.sampleRate);
-  // Stems get the same DC filter and the bus compressor's gain curve and make-up taken from the full mix,
-  // so they sum exactly to the pre-limiter master; only the last fraction of a dB of limiting is missing.
-  // One-shot stems take the master's cut point and fade so they stay frame-aligned with it.
+  // Layer stems share the full mix’s mastering gain and tail cut.
   const end = p.loop ? frames : tailEnd(mastered.out, frames - Math.round((opts.tailS ?? 3) * p.sampleRate));
   const finish = (buf: Stereo): Stereo => (p.loop ? buf : cutWithFade(buf, end, p.sampleRate));
   for (const [layer, stem] of Object.entries(stems) as [Layer, Stereo][]) stems[layer] = finish(masterStem(stem, mastered.gainCurve, p.master.hpfHz, p.loop, p.sampleRate));
   const out = finish(mastered.out);
-  return { mix: out, stems, frames: out.left.length, loop: p.loop, master: mastered.stats, tracks: stats, warnings: trackBalance(stats) };
+  for (const map of new Set([trackStems, auditionStems])) {
+    for (const [id, audio] of map) map.set(id, finish(audio));
+  }
+  for (const [id, audio] of busStems) busStems.set(id, finish(audio));
+  return { mix: out, stems, busStems, trackStems, auditionStems, reductions, findings, frames: out.left.length, loop: p.loop, master: mastered.stats, tracks: stats, warnings: trackBalance(stats) };
 }
 
 // One-shots end where the audio decays below -80 dBFS.

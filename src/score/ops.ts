@@ -1,3 +1,5 @@
+import { auditionHtml } from '../io/auditionHtml.js';
+import { analyzeMix } from '../ears/masking.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { critique, type Critique } from './critic.js';
@@ -8,7 +10,7 @@ import type { CheckReport } from '../types.js';
 import { exportMidi } from './midi.js';
 import { FORMAT, parseProject, projectSummary, type Layer, type ParseResult, type Project } from './project.js';
 import { renderProject, tile } from './render.js';
-import { readWav, readWavFile, writeWav, type BitDepth } from '../io/wav.js';
+import { encodeDitheredWav, readWav, readWavFile, writeWav, type BitDepth } from '../io/wav.js';
 
 export interface RenderFilesOptions {
   readonly projectDir?: string;
@@ -18,6 +20,24 @@ export interface RenderFilesOptions {
   readonly repeats?: number;
   readonly layers?: readonly Layer[];
   readonly trackIds?: readonly string[];
+}
+
+export function inspectMix(p: Project, projectDir: string, auditionDir?: string) {
+  const render = renderProject(p, { projectDir, captureTracks: true });
+  const tracks = p.tracks.flatMap(t => {
+    const audio = render.trackStems.get(t.id);
+    return audio ? [{ id: t.id, role: t.role, audio }] : [];
+  });
+  const findings = [...analyzeMix(tracks, p.sampleRate, p.tempo, render.mix), ...render.findings].sort((a, b) => a.timeS - b.timeS);
+  if (auditionDir === undefined) return { findings, reductions: render.reductions };
+  const inputs = render.auditionStems.size ? render.auditionStems : new Map([['master', render.mix]]);
+  const stems = Array.from(inputs, ([id, audio]) => ({
+    id, wav: encodeDitheredWav({ channels: [audio.left, audio.right], sampleRate: p.sampleRate }, 32),
+  }));
+  const file = path.join(auditionDir, 'index.html');
+  fs.mkdirSync(auditionDir, { recursive: true });
+  fs.writeFileSync(file, auditionHtml(stems, findings));
+  return { file, stems: stems.map(s => s.id), findings };
 }
 
 export function renderToFiles(p: Project, o: RenderFilesOptions): Record<string, unknown> {
@@ -35,13 +55,16 @@ export function renderToFiles(p: Project, o: RenderFilesOptions): Record<string,
   }
   if (o.stemsDir !== undefined) {
     fs.mkdirSync(o.stemsDir, { recursive: true });
-    for (const [layer, stem] of Object.entries(r.stems)) {
-      const file = path.join(o.stemsDir, `${p.id}_${layer}.wav`);
+    const stems = [...Object.entries(r.stems), ...Array.from(r.busStems, ([id, audio]) => ['bus_' + encodeURIComponent(id), audio] as const)];
+    for (const [name, stem] of stems) {
+      const file = path.join(o.stemsDir, `${encodeURIComponent(p.id)}_${name}.wav`);
       writeWav(file, { sampleRate: p.sampleRate, channels: [stem.left, stem.right] }, bitDepth);
       written.push(file);
     }
   }
   return {
+    reductions: r.reductions,
+    findings: r.findings,
     out: o.out,
     repeatedOut,
     files: written,

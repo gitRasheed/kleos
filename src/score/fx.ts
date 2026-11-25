@@ -1,3 +1,4 @@
+import { applyParametricEq } from './eqParametric.js';
 import { SAMPLE_RATE, biquad, biquadStep, dbToGain, onePoleCoeff, type Biquad, type Stereo } from './dsp.js';
 import { cabFilters } from './instruments/guitar.js';
 import type { FxConfig } from './project.js';
@@ -11,6 +12,7 @@ export interface FxContext {
 
 export function applyFx(buf: Stereo, fx: FxConfig, ctx: FxContext): void {
   switch (fx.type) {
+    case 'eq': return applyParametricEq(buf, fx.bands, ctx.sampleRate);
     case 'eq3':
       return eq3(buf, fx);
     case 'chorus':
@@ -104,8 +106,8 @@ function delay(buf: Stereo, fx: Extract<FxConfig, { type: 'delay' }>, ctx: FxCon
       lineL[w] = xl + lpL * fx.feedback;
       lineR[w] = xr + lpR * fx.feedback;
     }
-    buf.left[i] = xl + outL * fx.mix;
-    buf.right[i] = xr + outR * fx.mix;
+    buf.left[i] = (fx.wetOnly ? 0 : xl) + outL * fx.mix;
+    buf.right[i] = (fx.wetOnly ? 0 : xr) + outR * fx.mix;
   }
 }
 
@@ -166,6 +168,19 @@ export function compress(buf: Stereo, c: CompressorSettings, sr = SAMPLE_RATE, g
     buf.right[i] = r * g;
   }
   return deepest;
+}
+
+export function compressWithMeter(buf: Stereo, fx: CompressorSettings, ctx: FxContext) {
+  const gains = new Float64Array(buf.left.length);
+  compress(buf, fx, ctx.sampleRate, gains);
+  const start = ctx.loopFrames === null ? 0 : Math.max(0, gains.length - ctx.loopFrames);
+  let sum = 0, maxGrDb = 0;
+  for (const gain of gains.subarray(start)) {
+    const reduction = Math.max(0, (fx.makeupDb ?? 0) - 20 * Math.log10(gain));
+    sum += reduction;
+    maxGrDb = Math.max(maxGrDb, reduction);
+  }
+  return { maxGrDb, meanGrDb: sum / Math.max(1, gains.length - start) };
 }
 
 interface Comb {
@@ -256,7 +271,7 @@ function reverb(buf: Stereo, fx: Extract<FxConfig, { type: 'reverb' }>, sr = SAM
     }
     const wetL = outL * wet1 + outR * wet2 + erL * 0.35;
     const wetR = outR * wet1 + outL * wet2 + erR * 0.35;
-    buf.left[i] = dryL + wetL * fx.mix;
-    buf.right[i] = dryR + wetR * fx.mix;
+    buf.left[i] = (fx.wetOnly ? 0 : dryL) + wetL * fx.mix;
+    buf.right[i] = (fx.wetOnly ? 0 : dryR) + wetR * fx.mix;
   }
 }

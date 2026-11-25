@@ -216,6 +216,30 @@ function blockEnergies(
   return energies;
 }
 
+// EBU Tech 3342 uses 3 s windows, a -20 LU relative gate and the 10th and 95th percentiles.
+export function loudnessRange(channels: readonly Float64Array[], sampleRate: number): number | null {
+  const frames = channels[0]?.length ?? 0;
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new RangeError('Invalid sample rate');
+  const hop = Math.max(1, Math.round(sampleRate / 10));
+  const padded = frames + Math.ceil(1.5 * sampleRate);
+  if (padded < 30 * hop || frames === 0) return null;
+  const stages = kWeightingStages(sampleRate);
+  const energies = channels.map(channel => hopEnergies(channel, padded, hop, stages));
+  const absolute = 10 ** ((-70 + 0.691) / 10);
+  const levels: number[] = [];
+  let sum = 0;
+  for (let h = 0; h < Math.floor(padded / hop); h++) {
+    for (const channel of energies) sum += (channel[h] ?? 0) - (channel[h - 30] ?? 0);
+    const power = sum / (30 * hop);
+    if (h >= 29 && power >= absolute) levels.push(power);
+  }
+  if (!levels.length) return null;
+  const gate = 0.01 * levels.reduce((a, b) => a + b, 0) / levels.length;
+  const kept = levels.filter(x => x >= gate).sort((a, b) => a - b);
+  const percentile = (p: number) => kept[Math.round((kept.length - 1) * p)] ?? 0;
+  return 10 * Math.log10(percentile(0.95) / percentile(0.10));
+}
+
 export function measureLoudness(
   channels: readonly Float64Array[],
   sampleRate: number,
@@ -287,7 +311,15 @@ export function measureLoudness(
     }
   }
 
+  let peak = 0, squares = 0;
+  for (const channel of channels) for (const x of channel) {
+    peak = Math.max(peak, Math.abs(x));
+    squares += x * x;
+  }
   return {
+    lraLu: loudnessRange(channels, sampleRate),
+    plrDb: truePeak.truePeakDbtp === null || integratedLufs === null ? null : truePeak.truePeakDbtp - integratedLufs,
+    crestFactorDb: squares === 0 ? null : 20 * Math.log10(peak / Math.sqrt(squares / (frames * channels.length))),
     integratedLufs: integratedLufs !== null ? Number(integratedLufs.toFixed(3)) : null,
     integratedReason,
     momentaryMaxLufs: momentaryMaxLufs !== null ? Number(momentaryMaxLufs.toFixed(3)) : null,

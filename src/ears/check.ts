@@ -1,3 +1,4 @@
+import { detectFlatTopClipping } from './clipDetect.js';
 import type { DecodedAudio } from '../io/wav.js';
 import { PROFILE_THRESHOLDS, measureHum, measureSeam, type Profile } from './profiles.js';
 import { measureAliasingRatio } from './aliasing.js';
@@ -280,33 +281,13 @@ function analyzeChannel(
   let sum = 0;
   let sumSq = 0;
   let fullScaleSamples = 0;
-  let flatSamples = 0;
-  let plateaus = 0;
-  let run = 0;
-  let previous = 0;
-  let approachedPeak = false;
   let fullScaleRun = 0;
   let fullScaleMaxRun = 0;
 
   for (let i = 0; i < n; i += 1) {
     const v = buf[i] ?? 0;
     const abs = Math.abs(v);
-    if (abs > peak) {
-      peak = abs;
-      flatSamples = 0;
-      plateaus = 0;
-    }
-    // Square waves jump between rails; a clipped slope reaches its rail through intermediate values.
-    if (v !== previous) approachedPeak = v * previous > 0 && Math.abs(previous) < abs;
-    run = v === previous ? run + 1 : 1;
-    previous = v;
-    if (approachedPeak && abs === peak && run >= 4) {
-      if (run === 4) {
-        plateaus++;
-        flatSamples += 3;
-      }
-      flatSamples++;
-    }
+    peak = Math.max(peak, abs);
     sum += v;
     sumSq += v * v;
     if (abs >= 0.999) {
@@ -369,7 +350,7 @@ function analyzeChannel(
     dcOffset: roundNum(dcOffset, 6),
     fullScaleSamples,
     fullScaleMaxRun,
-    flatTopSamples: plateaus >= 4 && peak >= 0.001 ? flatSamples : 0,
+    flatTopSamples: detectFlatTopClipping([buf], sampleRate).reduce((sum, hit) => sum + hit.flatSamples, 0),
     startEdgePeak: roundNum(startEdgePeak, 5),
     endEdgePeak: roundNum(endEdgePeak, 5),
     leadingSilenceS: roundNum(leadingSilenceS, 4),

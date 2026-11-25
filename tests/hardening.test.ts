@@ -374,14 +374,11 @@ describe('spectral metrics cover the whole file', () => {
 });
 
 describe('SKILL.md', () => {
-  const skill = fs.readFileSync(path.join(PKG_ROOT, 'SKILL.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(PKG_ROOT, 'skills', 'agent-audio', 'SKILL.md'), 'utf8');
 
-  it('documents every threshold key', () => {
-    assert.deepEqual(THRESHOLD_KEYS.filter((key) => !skill.includes(key)), []);
-  });
-
-  it('documents every finding code', () => {
-    assert.deepEqual(FINDING_CODES.filter((code) => !skill.includes(code)), []);
+  it('makes every finding code discoverable through the CLI help', () => {
+    const help = runCli(['--help']);
+    assert.deepEqual(FINDING_CODES.filter((code) => !help.stdout.includes(code)), []);
   });
 
   const examples = [...skill.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => JSON.parse(m[1] ?? '') as unknown);

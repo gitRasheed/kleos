@@ -22,6 +22,8 @@ export const SCORE_USAGE = `Project
   export-musicxml <project.json> --out <score.musicxml>
 
 Sound
+  audition <project.json> --out <dir>
+  masking <project.json>
   render <project.json> --out <file.wav> [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers base,combat] [--tracks id1,id2]
          --repeats N   loops only: --out X.wav keeps one pass and X_xN.wav beside it holds N; both paths
                        are printed as "out" and "repeatedOut"
@@ -89,6 +91,8 @@ const COMMAND_TOOL: Readonly<Record<string, string>> = {
   'add-fx': 'add_fx',
   'add-automation': 'add_automation',
   render: 'render',
+  masking: 'masking',
+  audition: 'audition',
   'export-midi': 'export_midi',
   'export-abc': 'export_abc',
   'export-musicxml': 'export_musicxml',

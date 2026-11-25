@@ -8,6 +8,7 @@ export const LOOP_PAD_S = 2;
 export interface MasterStats {
   readonly preLufs: number | null;
   readonly gainDb: number;
+  readonly compressorMeanGrDb: number;
   readonly compressorGrDb: number;
   readonly limiterGrDb: number;
   readonly limiterThresholdDb: number;
@@ -94,7 +95,13 @@ export function masterBus(mix: Stereo, cfg: MasterConfig, loop: boolean, sr = SA
   const work = loop ? wrapPad(mix, pad) : { left: mix.left.slice(), right: mix.right.slice() };
   highpass(work, cfg.hpfHz, sr);
   const curve = new Float64Array(work.left.length).fill(1);
-  const compressorGrDb = cfg.compressor === null ? 0 : compress(work, { ...cfg.compressor, kneeDb: 6 }, sr, curve);
+  if (cfg.compressor !== null) compress(work, { ...cfg.compressor, kneeDb: 6 }, sr, curve);
+  let compressorGrDb = 0, totalReduction = 0;
+  for (const gain of curve.subarray(pad, pad + n)) {
+    const reduction = -20 * Math.log10(gain);
+    compressorGrDb = Math.max(compressorGrDb, reduction);
+    totalReduction += reduction;
+  }
   const body = (b: Stereo): Stereo => (loop ? crop(b, pad, n) : b);
   const preLufs = integratedLufs([body(work).left, body(work).right], sr);
   let gainDb = preLufs === null ? 0 : cfg.targetLufs - preLufs;
@@ -124,6 +131,7 @@ export function masterBus(mix: Stereo, cfg: MasterConfig, loop: boolean, sr = SA
       preLufs,
       gainDb,
       compressorGrDb,
+      compressorMeanGrDb: totalReduction / Math.max(1, n),
       limiterGrDb: result.deepestDb,
       limiterThresholdDb: thresholdDb,
       lufs,

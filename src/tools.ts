@@ -4,7 +4,7 @@ import { lintScore } from './theory/index.js';
 import { parseLintScore } from './score/theory.js';
 import { EDIT_OPS, runEdit, type Backend, type EditOp } from './score/edit.js';
 import { PROFILES, parseProfile } from './ears/profiles.js';
-import { analyseAudioFile, critiqueProject, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
+import { analyseAudioFile, inspectMix, critiqueProject, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
 import {
   INSTRUMENTS,
   KINDS,
@@ -193,7 +193,7 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'add_fx',
-    description: 'Append an insert effect to a track: eq3, chorus, delay (tempo-synced timeBeats), reverb (hall|plate|room), overdrive, cab, compressor.',
+    description: 'Append an insert effect to a track: eq (up to eight bands), eq3, chorus, delay (tempo-synced timeBeats), reverb (hall|plate|room), overdrive, cab, compressor.',
     inputSchema: schema({ ...trackArg, fx: o('Effect object with type and parameters') }, ['project', 'trackId', 'fx']),
     run: (a) => commit(a, addFx(load(a), reqStr(a, 'trackId'), a.fx)),
   },
@@ -270,6 +270,18 @@ export const TOOLS: readonly Tool[] = [
       const ok = findings.every(d => d.severity !== 'error');
       return { ok, data: { ok, style: score.style, findings } };
     },
+  },
+  {
+    name: 'masking',
+    description: 'Locate lead masking, tonal buildup and mono loss in the rendered project.',
+    inputSchema: schema(projectArg, ['project']),
+    run: a => ({ ok: true, data: inspectMix(load(a), path.dirname(reqStr(a, 'project'))) }),
+  },
+  {
+    name: 'audition',
+    description: 'Write an offline stem audition player with synchronized playback and located mix findings.',
+    inputSchema: schema({ ...projectArg, out: s('Output directory for index.html') }, ['project', 'out']),
+    run: a => ({ ok: true, data: inspectMix(load(a), path.dirname(reqStr(a, 'project')), reqStr(a, 'out')) }),
   },
   checkTool,
   { ...checkTool, name: 'gate' },

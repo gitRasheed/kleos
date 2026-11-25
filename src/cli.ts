@@ -14,7 +14,7 @@ import { checkMix, MIX_THRESHOLD_KEYS, MixError, mixStems, parseMixFlag, parseMi
 import { writeInspectionPngs } from './io/png.js';
 import { errorRow, formatSummaryTable, summaryRow, type SummaryRow } from './ears/summary.js';
 import { RecipeError, renderRecipe, validateRecipe } from './recipe/synth.js';
-import { THRESHOLD_KEYS, WavError, type AudioBufferData, type CheckReport, type CheckThresholds } from './types.js';
+import { FINDING_CODES, THRESHOLD_KEYS, WavError, type AudioBufferData, type CheckReport, type CheckThresholds } from './types.js';
 import { decodeWav, encodeWav, readWavFile } from './io/wav.js';
 
 const KNOWN_THRESHOLD_KEYS: ReadonlySet<string> = new Set(THRESHOLD_KEYS);
@@ -43,6 +43,9 @@ function usage(): string {
     '',
     'Threshold keys for --thresholds, with defaults:',
     ...thresholdLines,
+    '',
+    'WAV finding codes:',
+    FINDING_CODES.join(', '),
   ].join('\n');
 }
 
@@ -368,11 +371,14 @@ export function main(argv: readonly string[]): number {
     if (cmd === 'skill') {
       if (argv[1] !== 'install' || argv.slice(2).some((arg) => arg !== '--project')) throw new Error('Usage: agent-audio skill install [--project]');
       const root = argv.includes('--project') ? process.cwd() : os.homedir();
-      const dir = path.join(root, '.agents', 'skills', 'agent-audio');
       const pkg = path.dirname(createRequire(import.meta.url).resolve('agent-audio/package.json'));
-      fs.mkdirSync(dir, { recursive: true });
-      fs.copyFileSync(path.join(pkg, 'SKILL.md'), path.join(dir, 'SKILL.md'));
-      process.stdout.write(`${path.join(dir, 'SKILL.md')}\n`);
+      for (const agent of ['.agents', '.claude']) {
+        const dir = path.join(root, agent, 'skills', 'agent-audio');
+        fs.mkdirSync(dir, { recursive: true });
+        const target = path.join(dir, 'SKILL.md');
+        fs.copyFileSync(path.join(pkg, 'skills', 'agent-audio', 'SKILL.md'), target);
+        process.stdout.write(target + '\n');
+      }
       return 0;
     }
     if (cmd !== undefined) return scoreCommand(cmd, argv.slice(1));

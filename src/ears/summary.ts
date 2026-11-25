@@ -9,6 +9,8 @@ export interface SummaryRow {
   readonly lufs: string;
   readonly truePeakDbtp: string;
   readonly centroidHz: string;
+  readonly profile: string;
+  readonly loopChecked: string;
   readonly seam: string;
   readonly findings: string;
 }
@@ -20,6 +22,8 @@ const COLUMNS: readonly { readonly key: keyof SummaryRow; readonly title: string
   { key: 'lufs', title: 'LUFS' },
   { key: 'truePeakDbtp', title: 'DBTP' },
   { key: 'centroidHz', title: 'CENTROID_HZ' },
+  { key: 'profile', title: 'PROFILE' },
+  { key: 'loopChecked', title: 'LOOP_CHECKED' },
   { key: 'seam', title: 'SEAM' },
   { key: 'findings', title: 'FINDINGS' },
 ];
@@ -47,6 +51,8 @@ export function summaryRow(report: CheckReport, label = report.file): SummaryRow
   const seamRatios = report.channels.flatMap((c) => (c.loopSeam !== null ? [c.loopSeam.discontinuityRatio] : []));
   return {
     file: label,
+    profile: report.profile,
+    loopChecked: report.loopChecked ? 'yes' : 'no',
     verdict: verdictOf(report),
     durationS: report.format.durationS.toFixed(3),
     lufs,
@@ -61,6 +67,8 @@ export function errorRow(file: string, code: string): SummaryRow {
   return {
     file,
     verdict: 'ERROR',
+    profile: '-',
+    loopChecked: '-',
     durationS: '-',
     lufs: '-',
     truePeakDbtp: '-',

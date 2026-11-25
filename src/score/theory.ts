@@ -95,11 +95,25 @@ export function parseLintScore(raw: unknown, override?: unknown): Score {
   if (style !== 'free' && style !== 'strict') throw new Error('style must be strict or free');
   if (format !== undefined && format !== FORMAT && format !== 'agent-audio/score/v1') throw new Error(`Unknown score format: ${String(format)}`);
   if (format === FORMAT || (format === 'agent-audio/score/v1' && !('ticksPerBeat' in raw))) {
-    const parsed = parseProject({ ...raw, format: FORMAT });
+    const project = { ...raw };
+    delete project.schemaVersion;
+    delete project.style;
+    const parsed = parseProject({ ...project, format: FORMAT });
     if (!parsed.ok) throw new Error(parsed.errors.map(e => `${e.path}: ${e.message}`).join('\n'));
     return projectToTheoryScore(parsed.value, style);
   }
   const score = { ...raw, style };
   if (!theoryShape(score)) throw new Error('Invalid theory score: expected ticksPerBeat, beatsPerBar and tracks with measured pitch events');
+  function allowed(value: object, fields: string[], path: string) {
+    for (const key of Object.keys(value)) if (!fields.includes(key)) throw new Error(path + '.' + key + ': unknown key');
+  }
+  allowed(score, ['format', 'schemaVersion', 'style', 'ticksPerBeat', 'beatsPerBar', 'tonic', 'harmony', 'tracks'], '$');
+  score.harmony?.forEach((h, i) => allowed(h, ['bar', 'beat', 'chord'], '$.harmony[' + i + ']'));
+  score.tracks.forEach((t, i) => {
+    const path = '$.tracks[' + i + ']';
+    allowed(t, ['id', 'voice', 'instrument', 'pitchBasis', 'doublingGroup', 'dynamic', 'bars'], path);
+    t.bars.forEach((bar, b) => bar.forEach((e, j) =>
+      allowed(e, ['ticks', 'pitches', 'dynamic', 'articulations'], path + '.bars[' + b + '][' + j + ']')));
+  });
   return score;
 }

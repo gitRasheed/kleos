@@ -1,3 +1,5 @@
+import { planRouting, type MixBus, type Send } from './mixGraph.js';
+import type { EqBand } from './eqParametric.js';
 import { INSTRUMENT_DEFS } from '../theory/instruments.js';
 import fs from 'node:fs';
 import { SAMPLE_RATE } from './dsp.js';
@@ -24,7 +26,7 @@ export const INSTRUMENTS = [...NATIVE_INSTRUMENTS, 'sf2'] as const;
 export const LAYERS = ['base', 'tension', 'combat', 'climax'] as const;
 export const ROLES = ['lead', 'counter', 'harmony', 'bass', 'percussion', 'pad', 'fx'] as const;
 export const KINDS = ['cue', 'loop', 'stinger', 'sfx'] as const;
-export const FX_TYPES = ['eq3', 'chorus', 'delay', 'reverb', 'overdrive', 'cab', 'compressor'] as const;
+export const FX_TYPES = ['eq', 'eq3', 'chorus', 'delay', 'reverb', 'overdrive', 'cab', 'compressor'] as const;
 export const AUTOMATION_PARAMS = ['volume', 'cutoff'] as const;
 
 export const MODES: Readonly<Record<string, readonly number[]>> = {
@@ -82,10 +84,11 @@ export type InstrumentConfig =
   | { readonly type: 'sf2'; readonly params: { readonly bank: string; readonly program: number } };
 
 export type FxConfig =
+  | { readonly type: 'eq'; readonly bands: readonly EqBand[] }
   | { readonly type: 'eq3'; readonly lowDb: number; readonly midDb: number; readonly highDb: number; readonly lowHz: number; readonly midHz: number; readonly highHz: number; readonly midQ: number }
   | { readonly type: 'chorus'; readonly rateHz: number; readonly depthMs: number; readonly delayMs: number; readonly mix: number }
-  | { readonly type: 'delay'; readonly timeBeats: number; readonly feedback: number; readonly mix: number; readonly pingPong: boolean; readonly dampHz: number }
-  | { readonly type: 'reverb'; readonly preset: 'hall' | 'plate' | 'room'; readonly decay: number; readonly mix: number; readonly predelayMs: number; readonly damping: number; readonly width: number }
+  | { readonly type: 'delay'; readonly wetOnly?: boolean; readonly timeBeats: number; readonly feedback: number; readonly mix: number; readonly pingPong: boolean; readonly dampHz: number }
+  | { readonly type: 'reverb'; readonly wetOnly?: boolean; readonly preset: 'hall' | 'plate' | 'room'; readonly decay: number; readonly mix: number; readonly predelayMs: number; readonly damping: number; readonly width: number }
   | { readonly type: 'overdrive'; readonly drive: number; readonly tone: number; readonly mix: number }
   | { readonly type: 'cab'; readonly lowCutHz: number; readonly highCutHz: number; readonly presenceDb: number }
   | { readonly type: 'compressor'; readonly thresholdDb: number; readonly ratio: number; readonly attackMs: number; readonly releaseMs: number; readonly makeupDb: number; readonly kneeDb: number };
@@ -101,6 +104,9 @@ export interface AutomationLane {
 }
 
 export interface Track {
+  readonly to?: string;
+  readonly sends?: readonly Send[];
+  readonly solo?: boolean;
   readonly id: string;
   readonly name: string;
   readonly role: Role;
@@ -134,6 +140,7 @@ export interface MasterConfig {
 }
 
 export interface Project {
+  readonly buses?: readonly MixBus[];
   readonly sourceAbc?: string;
   readonly format: typeof FORMAT;
   readonly id: string;
@@ -174,6 +181,10 @@ type Obj = Record<string, unknown>;
 
 function isObj(v: unknown): v is Obj {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function keys(ctx: Ctx, raw: Obj, path: string, allowed: readonly string[]): void {
+  for (const key of Object.keys(raw)) if (!allowed.includes(key)) ctx.error(path + '.' + key, 'unknown key');
 }
 
 function num(ctx: Ctx, o: Obj, key: string, path: string, def: number | undefined, lo = -Infinity, hi = Infinity): number {
@@ -238,6 +249,7 @@ export function parseNote(ctx: Ctx, raw: unknown, path: string): Note | null {
     ctx.error(path, 'note must be an object');
     return null;
   }
+  keys(ctx, raw, path, ['midi', 'pitch', 'startBeat', 'durationBeats', 'velocity', 'articulation', 'pan', 'pitchBend']);
   // notes/v1 spells the key "pitch"; midi is canonical.
   const keyed = raw.midi === undefined && raw.pitch !== undefined ? { ...raw, midi: raw.pitch } : raw;
   const midi = num(ctx, keyed, 'midi', path, undefined, 0, 127);
@@ -268,6 +280,7 @@ export function parseClip(ctx: Ctx, raw: unknown, path: string, patterns: Readon
     ctx.error(path, 'clip must be an object');
     return null;
   }
+  keys(ctx, raw, path, ['id', 'startBeat', 'notes', 'repeat', 'transpose', 'velocityScale', 'pattern']);
   const clip: { -readonly [K in keyof Clip]: Clip[K] } = {
     id: str(ctx, raw, 'id', path),
     startBeat: num(ctx, raw, 'startBeat', path, 0, 0),
@@ -285,22 +298,38 @@ export function parseClip(ctx: Ctx, raw: unknown, path: string, patterns: Readon
   return clip;
 }
 
+const sectionParams = ['players', 'brightness'];
+const stringParams = [...sectionParams, 'vibratoCents'];
+const guitarParams = ['brightness', 'pickPosition', 't60'];
+const instrumentParams: Record<InstrumentType, readonly string[]> = {
+  piano: ['brightness', 'pedal'],
+  'brass-horn': sectionParams, 'brass-trumpet': sectionParams,
+  'strings-ensemble': stringParams, 'strings-cello': stringParams, 'strings-bass': stringParams,
+  'guitar-acoustic': guitarParams, 'guitar-electric': [...guitarParams, 'drive', 'double', 'palmMute'],
+  timpani: [], 'orchestral-perc': [],
+  'synth-pad': ['voices', 'attack', 'release', 'detuneCents', 'cutoff'],
+  'synth-bass': ['cutoff', 'envAmount'], 'cinematic-sfx': ['preset'], sf2: ['bank', 'program'],
+};
+
 export function parseInstrument(ctx: Ctx, raw: unknown, path: string): InstrumentConfig {
   if (typeof raw === 'string') raw = { type: raw };
   if (!isObj(raw)) {
     ctx.error(path, 'instrument must be an object or a type name');
     return { type: 'piano', params: {} };
   }
+  keys(ctx, raw, path, ['type', 'params']);
   const type = oneOf(ctx, raw, 'type', path, INSTRUMENTS);
   const params: Record<string, ParamValue> = {};
   const rawParams = raw.params;
   if (rawParams !== undefined) {
     if (!isObj(rawParams)) ctx.error(`${path}.params`, 'must be an object');
-    else
+    else {
+      keys(ctx, rawParams, path + '.params', instrumentParams[type]);
       for (const [k, v] of Object.entries(rawParams)) {
         if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') params[k] = v;
         else ctx.error(`${path}.params.${k}`, 'must be a number, string or boolean');
       }
+    }
   }
   if (type === 'sf2') {
     const bank = str(ctx, params, 'bank', path + '.params');
@@ -311,14 +340,44 @@ export function parseInstrument(ctx: Ctx, raw: unknown, path: string): Instrumen
   return { type, params };
 }
 
+function parseBand(ctx: Ctx, raw: unknown, path: string): EqBand[] {
+  if (!isObj(raw)) { ctx.error(path, 'EQ band must be an object'); return []; }
+  const type = oneOf(ctx, raw, 'type', path, ['hp12', 'hp24', 'lp12', 'lp24', 'bell', 'notch', 'lowshelf', 'highshelf'] as const);
+  const hz = num(ctx, raw, 'hz', path, undefined, 5, 0.49 * SAMPLE_RATE);
+  if (type === 'hp24' || type === 'lp24') {
+    keys(ctx, raw, path, ['type', 'hz']);
+    return [{ type, hz }];
+  }
+  const q = num(ctx, raw, 'q', path, Math.SQRT1_2, 0.0001);
+  if (type === 'hp12' || type === 'lp12' || type === 'notch') {
+    keys(ctx, raw, path, ['type', 'hz', 'q']);
+    return [{ type, hz, q }];
+  }
+  keys(ctx, raw, path, ['type', 'hz', 'q', 'gainDb']);
+  return [{ type, hz, q, gainDb: num(ctx, raw, 'gainDb', path, undefined, -48, 48) }];
+}
+
 export function parseFx(ctx: Ctx, raw: unknown, path: string): FxConfig | null {
   if (!isObj(raw)) {
     ctx.error(path, 'fx must be an object');
     return null;
   }
+  if (raw.params !== undefined && !isObj(raw.params)) ctx.error(path + '.params', 'must be an object');
   const p = isObj(raw.params) ? { ...raw.params, ...raw } : raw;
   const type = oneOf(ctx, p, 'type', path, FX_TYPES);
+  const fx = readFx(ctx, p, path, type);
+  keys(ctx, p, path, [...Object.keys(fx), 'params']);
+  return fx;
+}
+
+function readFx(ctx: Ctx, p: Obj, path: string, type: FxConfig['type']): FxConfig {
   switch (type) {
+    case 'eq': {
+      if (!Array.isArray(p.bands)) ctx.error(path + '.bands', 'expected an array of EQ bands');
+      const bands = arr(ctx, p, 'bands', path).flatMap((band, i) => parseBand(ctx, band, path + '.bands[' + i + ']'));
+      if (bands.length > 8) ctx.error(path + '.bands', 'at most eight EQ bands');
+      return { type, bands };
+    }
     case 'eq3':
       return {
         type,
@@ -341,6 +400,7 @@ export function parseFx(ctx: Ctx, raw: unknown, path: string): FxConfig | null {
     case 'delay':
       return {
         type,
+        ...(p.wetOnly === undefined ? {} : { wetOnly: bool(ctx, p, 'wetOnly', path, false) }),
         timeBeats: num(ctx, p, 'timeBeats', path, 0.75, 0.0625, 8),
         feedback: num(ctx, p, 'feedback', path, 0.3, 0, 0.95),
         mix: num(ctx, p, 'mix', path, 0.2, 0, 1),
@@ -350,6 +410,7 @@ export function parseFx(ctx: Ctx, raw: unknown, path: string): FxConfig | null {
     case 'reverb':
       return {
         type,
+        ...(p.wetOnly === undefined ? {} : { wetOnly: bool(ctx, p, 'wetOnly', path, false) }),
         preset: oneOf(ctx, p, 'preset', path, ['hall', 'plate', 'room'] as const, 'hall'),
         decay: num(ctx, p, 'decay', path, 0.85, 0, 0.98),
         mix: num(ctx, p, 'mix', path, 0.25, 0, 1),
@@ -389,6 +450,7 @@ export function parseAutomation(ctx: Ctx, raw: unknown, path: string): Automatio
     ctx.error(path, 'automation lane must be an object');
     return null;
   }
+  keys(ctx, raw, path, ['param', 'points']);
   const param = oneOf(ctx, raw, 'param', path, AUTOMATION_PARAMS);
   const [lo, hi] = param === 'volume' ? [-80, 12] : [20, 20000];
   const points: AutomationPoint[] = [];
@@ -398,6 +460,7 @@ export function parseAutomation(ctx: Ctx, raw: unknown, path: string): Automatio
       ctx.error(pp, 'point must be an object');
       return;
     }
+    keys(ctx, pt, pp, ['beat', 'value']);
     points.push({ beat: num(ctx, pt, 'beat', pp, undefined, 0), value: num(ctx, pt, 'value', pp, undefined, lo, hi) });
   });
   if (points.length === 0) ctx.error(`${path}.points`, 'needs at least one point');
@@ -410,6 +473,7 @@ export const DEFAULT_PAN = Object.fromEntries(
 
 function parseTrackMidi(ctx: Ctx, raw: unknown, path: string): NonNullable<Track['midi']> {
   const obj = isObj(raw) ? raw : {};
+  keys(ctx, obj, path, ['channel', 'program', 'controls']);
   const integer = (item: Obj, key: string, prefix: string, max: number) => {
     const n = num(ctx, item, key, prefix, undefined, 0, max);
     if (!Number.isInteger(n)) ctx.error(prefix + '.' + key, 'must be an integer');
@@ -421,10 +485,41 @@ function parseTrackMidi(ctx: Ctx, raw: unknown, path: string): NonNullable<Track
     controls: arr(ctx, obj, 'controls', path).map((point, i) => {
       const cc = isObj(point) ? point : {};
       const prefix = path + '.controls[' + i + ']';
+      keys(ctx, cc, prefix, ['beat', 'number', 'value']);
       if (cc.number !== 1 && cc.number !== 11) ctx.error(prefix + '.number', 'expected CC1 or CC11');
       return { beat: num(ctx, cc, 'beat', prefix, undefined, 0), number: cc.number === 1 ? 1 : 11, value: integer(cc, 'value', prefix, 127) };
     }),
   };
+}
+
+function routing(ctx: Ctx, raw: Obj, path: string) {
+  const sends = arr(ctx, raw, 'sends', path).flatMap((send, i): Send[] => {
+    const at = path + '.sends[' + i + ']';
+    if (!isObj(send)) { ctx.error(at, 'send must be an object'); return []; }
+    keys(ctx, send, at, ['to', 'pre', 'levelDb']);
+    return [{ to: str(ctx, send, 'to', at), levelDb: num(ctx, send, 'levelDb', at, 0, -120, 24), pre: bool(ctx, send, 'pre', at, false) }];
+  });
+  return {
+    ...(raw.to === undefined ? {} : { to: str(ctx, raw, 'to', path) }),
+    ...(raw.solo === undefined ? {} : { solo: bool(ctx, raw, 'solo', path, false) }),
+    ...(raw.sends === undefined ? {} : { sends }),
+  };
+}
+
+function parseBus(ctx: Ctx, raw: unknown, path: string): MixBus[] {
+  if (!isObj(raw)) { ctx.error(path, 'bus must be an object'); return []; }
+  keys(ctx, raw, path, ['id', 'to', 'sends', 'solo', 'mute', 'gainDb', 'fx']);
+  const fx = arr(ctx, raw, 'fx', path).flatMap((value, i): NonNullable<MixBus['fx']>[number][] => {
+    const at = path + '.fx[' + i + ']';
+    if (isObj(value) && value.type === 'limiter') {
+      keys(ctx, value, at, ['type', 'thresholdDb']);
+      return [{ type: 'limiter', thresholdDb: num(ctx, value, 'thresholdDb', at, -1, -60, 0) }];
+    }
+    const effect = parseFx(ctx, value, at);
+    return effect ? [effect] : [];
+  });
+  return [{ id: str(ctx, raw, 'id', path), ...routing(ctx, raw, path), mute: bool(ctx, raw, 'mute', path, false),
+    gainDb: num(ctx, raw, 'gainDb', path, 0, -60, 12), fx }];
 }
 
 export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Track | null {
@@ -432,6 +527,7 @@ export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Reado
     ctx.error(path, 'track must be an object');
     return null;
   }
+  keys(ctx, raw, path, ['id', 'name', 'role', 'layer', 'instrument', 'gainDb', 'pan', 'mute', 'fx', 'automation', 'midi', 'clips', 'to', 'sends', 'solo']);
   const id = str(ctx, raw, 'id', path);
   const instrument = parseInstrument(ctx, raw.instrument ?? 'piano', `${path}.instrument`);
   const clips: Clip[] = [];
@@ -456,6 +552,7 @@ export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Reado
   }
   return {
     id,
+    ...routing(ctx, raw, path),
     name: str(ctx, raw, 'name', path, id),
     ...(raw.midi === undefined ? {} : { midi: parseTrackMidi(ctx, raw.midi, path + '.midi') }),
     role: oneOf(ctx, raw, 'role', path, ROLES, INSTRUMENT_DEFS[instrument.type].defaultRole),
@@ -477,8 +574,10 @@ export function loopFrames(bpm: number, beatsPerBar: number, bars: number, sr = 
 export function parseProject(raw: unknown): ParseResult<Project> {
   const ctx = new Ctx();
   if (!isObj(raw)) return { ok: false, errors: [{ path: '$', message: 'project must be a JSON object' }], warnings: [] };
+  keys(ctx, raw, '$', ['format', 'id', 'title', 'kind', 'tempo', 'key', 'bars', 'loop', 'sampleRate', 'master', 'sections', 'patterns', 'tracks', 'buses', 'sourceAbc']);
   if (raw.format !== FORMAT) ctx.error('$.format', `must be "${FORMAT}"`);
   const tempoRaw = isObj(raw.tempo) ? raw.tempo : {};
+  keys(ctx, tempoRaw, '$.tempo', ['bpm', 'beatsPerBar', 'beatUnit']);
   const tempo = {
     bpm: num(ctx, tempoRaw, 'bpm', '$.tempo', 120, 20, 300),
     beatsPerBar: num(ctx, tempoRaw, 'beatsPerBar', '$.tempo', 4, 1, 16),
@@ -488,6 +587,7 @@ export function parseProject(raw: unknown): ParseResult<Project> {
       !Number.isInteger(tempo.beatsPerBar * tempo.beatUnit / 4) || tempo.beatsPerBar * tempo.beatUnit / 4 > 255))
     ctx.error('$.tempo.beatUnit', 'expected a power-of-two denominator with an integral numerator up to 255');
   const keyRaw = isObj(raw.key) ? raw.key : {};
+  keys(ctx, keyRaw, '$.key', ['tonic', 'mode']);
   const key = {
     tonic: oneOf(ctx, keyRaw, 'tonic', '$.key', Object.keys(TONICS), 'C'),
     mode: oneOf(ctx, keyRaw, 'mode', '$.key', Object.keys(MODES), 'major'),
@@ -499,10 +599,12 @@ export function parseProject(raw: unknown): ParseResult<Project> {
   const kind = oneOf(ctx, raw, 'kind', '$', KINDS, 'loop');
   const loop = bool(ctx, raw, 'loop', '$', kind === 'loop');
   const masterRaw = isObj(raw.master) ? raw.master : {};
+  keys(ctx, masterRaw, '$.master', ['targetLufs', 'ceilingDbtp', 'hpfHz', 'compressor']);
   let compressor: MasterConfig['compressor'] = { thresholdDb: -14, ratio: 2, attackMs: 25, releaseMs: 250 };
   if (masterRaw.compressor === null) compressor = null;
   else if (isObj(masterRaw.compressor)) {
     const c = masterRaw.compressor;
+    keys(ctx, c, '$.master.compressor', ['thresholdDb', 'ratio', 'attackMs', 'releaseMs']);
     compressor = {
       thresholdDb: num(ctx, c, 'thresholdDb', '$.master.compressor', -14, -60, 0),
       ratio: num(ctx, c, 'ratio', '$.master.compressor', 2, 1, 20),
@@ -527,6 +629,7 @@ export function parseProject(raw: unknown): ParseResult<Project> {
           ctx.error(pp, 'pattern must be an object');
           continue;
         }
+        keys(ctx, pr, pp, ['notes', 'lengthBeats']);
         const notes = parseNotes(ctx, arr(ctx, pr, 'notes', pp), `${pp}.notes`);
         const end = notes.reduce((m, n) => Math.max(m, n.startBeat + n.durationBeats), 0);
         patterns[pid] = { lengthBeats: num(ctx, pr, 'lengthBeats', pp, Math.max(1, Math.ceil(end)), 0.25), notes };
@@ -551,6 +654,7 @@ export function parseProject(raw: unknown): ParseResult<Project> {
       ctx.error(sp, 'section must be an object');
       return;
     }
+    keys(ctx, s, sp, ['id', 'startBar', 'bars', 'layer']);
     const section: { -readonly [K in keyof Section]: Section[K] } = {
       id: str(ctx, s, 'id', sp),
       startBar: num(ctx, s, 'startBar', sp, undefined, 0),
@@ -561,7 +665,13 @@ export function parseProject(raw: unknown): ParseResult<Project> {
     sections.push(section);
   });
 
+  const buses = arr(ctx, raw, 'buses', '$').flatMap((bus, i) => parseBus(ctx, bus, '$.buses[' + i + ']'));
+  if (buses.length || tracks.some(t => t.to !== undefined || t.sends || t.solo)) {
+    try { planRouting(tracks, buses); }
+    catch (error) { ctx.error('$.buses', error instanceof Error ? error.message : String(error)); }
+  }
   const project: Project = {
+    ...(raw.buses === undefined ? {} : { buses }),
     ...(raw.sourceAbc !== undefined ? { sourceAbc: str(ctx, raw, 'sourceAbc', '$') } : {}),
     format: FORMAT,
     id: str(ctx, raw, 'id', '$', 'untitled'),

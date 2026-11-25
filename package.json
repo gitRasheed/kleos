@@ -23,7 +23,7 @@
   "files": [
     "dist",
     "recipes",
-    "SKILL.md",
+    "skills",
     "LICENSE",
     "examples"
   ],
@@ -34,7 +34,7 @@
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.audio.json && tsc -p tsconfig.test.json --noEmit",
-    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js dist-test/tests/standards/*.test.js tests/theory/*.test.mjs",
+    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js dist-test/tests/standards/*.test.js tests/theory/*.test.mjs tests/studio/*.test.mjs",
     "lint": "eslint . --max-warnings=0",
     "check": "tsc -p tsconfig.audio.json && npm run lint && npm test"
   },
@@ -56,5 +56,6 @@
     "musicxml-io": "0.14.0",
     "spessasynth_core": "4.4.12",
     "tonal": "6.10.0"
-  }
+  },
+  "repository": "https://github.com/gitRasheed/agent-audio.git"
 }

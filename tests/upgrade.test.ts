@@ -419,7 +419,10 @@ describe('check --summary and batch', () => {
     assert.equal(res.status, 0);
     const lines = res.stdout.trim().split('\n');
     assert.equal(lines.length, 2);
-    assert.match(lines[0] ?? '', /^FILE\s+VERDICT\s+DUR_S\s+LUFS\s+DBTP\s+CENTROID_HZ\s+SEAM\s+FINDINGS$/);
+    assert.match(lines[0] ?? '', /^FILE\s+VERDICT\s+DUR_S\s+LUFS\s+DBTP\s+CENTROID_HZ\s+PROFILE\s+LOOP_CHECKED\s+SEAM\s+FINDINGS$/);
+    assert.match(lines[1] ?? '', /\sraw\s+no\s+-/);
+    const loop = runCli(['check', wav, '--profile', 'music', '--loop', '--summary']);
+    assert.match(loop.stdout.split('\n')[1] ?? '', /\smusic\s+yes\s+/);
     assert.match(lines[1] ?? '', /tone\.wav\s+PASS\s+0\.500\s+I-\d/);
   });
 

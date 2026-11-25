@@ -101,6 +101,9 @@ export interface LoopSeamMetrics {
 }
 
 export interface LoudnessMetrics {
+  readonly lraLu: number | null;
+  readonly plrDb: number | null;
+  readonly crestFactorDb: number | null;
   readonly integratedLufs: number | null;
   readonly integratedReason: string | null;
   readonly momentaryMaxLufs: number | null;

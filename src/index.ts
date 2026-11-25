@@ -1,5 +1,5 @@
 export { checkAudio, DEFAULT_LOOP_DISCONTINUITY_RATIO, DEFAULT_THRESHOLDS } from './ears/check.js';
-export { measureLoudness, measureTruePeak } from './ears/loudness.js';
+export { loudnessRange, measureLoudness, measureTruePeak } from './ears/loudness.js';
 export { encodeRgbPng, writeInspectionPngs } from './io/png.js';
 export { RecipeError, renderRecipe, validateRecipe } from './recipe/synth.js';
 export * from './types.js';
@@ -31,3 +31,4 @@ export * from './notation/abcBridge.js';
 export * from './notation/midiBridge.js';
 export { readMusicXml, writeMusicXml, type Score as NotationScore } from './notation/musicxmlBridge.js';
 export { renderSf2 } from './notation/sf2Adapter.js';
+export { analyzeMix, type SpectralFinding, type AnalysisTrack } from './ears/masking.js';
