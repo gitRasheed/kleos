@@ -160,7 +160,7 @@ export function softClip(x: number): number {
   return Math.tanh(x);
 }
 
-export function addInto(dst: Float64Array, src: Float64Array, offset: number, gain: number, wrap: boolean): void {
+export function addInto(dst: Float64Array, src: Float64Array | Float32Array, offset: number, gain: number, wrap: boolean): void {
   const n = dst.length;
   for (let i = 0; i < src.length; i += 1) {
     let j = offset + i;

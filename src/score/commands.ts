@@ -16,6 +16,10 @@ export const SCORE_USAGE = `Project
   add-fx <project.json> --track-id <id> --fx '<json>'
   add-automation <project.json> --track-id <id> --automation '<json>'
   import-notes <score.notes.json> <project.json>
+  import-abc <tune.abc> --out <project.json>
+  export-abc <project.json> --out <tune.abc>
+  import-midi <file.mid> (--out <project.json> | --into <existing.json>)
+  export-musicxml <project.json> --out <score.musicxml>
 
 Sound
   render <project.json> --out <file.wav> [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers base,combat] [--tracks id1,id2]
@@ -86,6 +90,8 @@ const COMMAND_TOOL: Readonly<Record<string, string>> = {
   'add-automation': 'add_automation',
   render: 'render',
   'export-midi': 'export_midi',
+  'export-abc': 'export_abc',
+  'export-musicxml': 'export_musicxml',
 };
 
 function print(data: unknown): void {
@@ -117,6 +123,15 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
     return callTool(tool, args);
   }
   switch (cmd) {
+    case 'import-abc':
+    case 'import-midi': {
+      const input = cmd === 'import-abc' ? 'abc' : 'midi';
+      const options = input === 'abc' ? ['out'] : ['out', 'into'];
+      if (!first || positional.length !== 1 || flags.size !== 1) throw new ToolError('Usage: ' + cmd + ' <file> ' + options.map(k => '--' + k + ' <project.json>').join(' | '));
+      const [key, values] = [...flags][0];
+      if (!options.includes(key) || values.length !== 1 || values[0] === 'true') throw new ToolError('Expected a project path for ' + cmd);
+      return callTool('import_' + input, { [input]: first, [key]: values[0] });
+    }
     case 'lint': {
       if (first === undefined || positional.length !== 1 || [...flags.keys()].some(k => k !== 'style') || (flags.get('style')?.length ?? 0) > 1)
         throw new ToolError('Usage: lint <score.json> [--style strict|free]');

@@ -26,3 +26,8 @@ export { readWav, writeWav, encodeDitheredWav, type Audio } from './io/wav.js';
 export { lintScore, INSTRUMENT_DEFS } from './theory/index.js';
 export type { Instrument, InstrumentDef, Score, Event, Track as TheoryTrack, Code, Diagnostic, Location } from './theory/index.js';
 export { parseLintScore, projectToTheoryScore } from './score/theory.js';
+export * from './notation/conductor.js';
+export * from './notation/abcBridge.js';
+export * from './notation/midiBridge.js';
+export { readMusicXml, writeMusicXml, type Score as NotationScore } from './notation/musicxmlBridge.js';
+export { renderSf2 } from './notation/sf2Adapter.js';

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import fs from 'node:fs';
 import { lintScore } from './theory/index.js';
 import { parseLintScore } from './score/theory.js';
@@ -24,6 +25,11 @@ import {
   type Project,
   type ProjectKind,
 } from './score/project.js';
+
+import { importAbcProject, importPerformance, projectNotation } from './notation/projectBridge.js';
+import { readMidiFile } from './notation/midiBridge.js';
+import { writeAbc } from './notation/abcBridge.js';
+import { writeMusicXml } from './notation/musicxmlBridge.js';
 
 type Args = Readonly<Record<string, unknown>>;
 
@@ -213,6 +219,7 @@ export const TOOLS: readonly Tool[] = [
       return {
         ok: true,
         data: renderToFiles(p, {
+          projectDir: path.dirname(reqStr(a, 'project')),
           out: reqStr(a, 'out'),
           ...defined({ bitDepth: bd as 16 | 24 | 32 | undefined, stemsDir: optStr(a, 'stemsDir'), repeats: optNum(a, 'repeats'), layers: layers as Layer[] | undefined, trackIds }),
         }),
@@ -266,6 +273,40 @@ export const TOOLS: readonly Tool[] = [
   },
   checkTool,
   { ...checkTool, name: 'gate' },
+  {
+    name: 'import_abc',
+    description: 'Import one ABC tune into a DAW project, retaining its written notation.',
+    inputSchema: schema({ abc: s('Input ABC path'), out: s('Output project JSON path') }, ['abc', 'out']),
+    run: a => {
+      const out = reqStr(a, 'out');
+      return commit({ project: out }, importAbcProject(fs.readFileSync(reqStr(a, 'abc'), 'utf8'), path.parse(out).name));
+    },
+  },
+  {
+    name: 'import_midi',
+    description: 'Import a Type 1 MIDI file. Use out for a new project, or into to replace notes on matching tracks in an existing mix.',
+    inputSchema: { ...schema({ midi: s('Input MIDI path'), into: s('Existing project to update'), out: s('New project path') }, ['midi']),
+      oneOf: [{ required: ['into'] }, { required: ['out'] }] },
+    run: a => {
+      if ((a.into === undefined) === (a.out === undefined)) throw new ToolError('Specify exactly one of into or out');
+      const file = reqStr(a, a.into === undefined ? 'out' : 'into');
+      const into = a.into === undefined ? undefined : readProject(file);
+      const song = readMidiFile(fs.readFileSync(reqStr(a, 'midi')));
+      return commit({ project: file }, importPerformance(song, path.parse(file).name, into));
+    },
+  },
+  ...([['export_abc', 'ABC', writeAbc], ['export_musicxml', 'MusicXML 4.0', writeMusicXml]] as const).map(([name, format, serialize]): Tool => ({
+    name,
+    description: 'Export each project track as a part in ' + format + '.',
+    inputSchema: schema({ ...projectArg, out: s('Output notation path') }, ['project', 'out']),
+    run: a => {
+      const file = reqStr(a, 'out');
+      const notation = serialize(projectNotation(load(a)));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, notation);
+      return { ok: true, data: { file, bytes: Buffer.byteLength(notation) } };
+    },
+  })),
   {
     name: 'export_midi',
     description: 'Export the project as a Standard MIDI File, type 1, 480 PPQ: a conductor track (tempo, meter, key, section markers) plus one track per instrument.',

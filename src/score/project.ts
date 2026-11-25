@@ -5,7 +5,7 @@ import { SAMPLE_RATE } from './dsp.js';
 export const FORMAT = 'agent-daw/v1';
 
 export const ARTICULATIONS = ['normal', 'legato', 'staccato', 'accent', 'sforzando'] as const;
-export const INSTRUMENTS = [
+export const NATIVE_INSTRUMENTS = [
   'piano',
   'brass-horn',
   'brass-trumpet',
@@ -20,6 +20,7 @@ export const INSTRUMENTS = [
   'synth-bass',
   'cinematic-sfx',
 ] as const;
+export const INSTRUMENTS = [...NATIVE_INSTRUMENTS, 'sf2'] as const;
 export const LAYERS = ['base', 'tension', 'combat', 'climax'] as const;
 export const ROLES = ['lead', 'counter', 'harmony', 'bass', 'percussion', 'pad', 'fx'] as const;
 export const KINDS = ['cue', 'loop', 'stinger', 'sfx'] as const;
@@ -39,7 +40,7 @@ export const MODES: Readonly<Record<string, readonly number[]>> = {
 };
 
 const TONICS: Readonly<Record<string, number>> = {
-  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
+  Cb: 11, C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
 };
 
 export type Articulation = (typeof ARTICULATIONS)[number];
@@ -76,10 +77,9 @@ export interface Clip {
 
 export type ParamValue = number | string | boolean;
 
-export interface InstrumentConfig {
-  readonly type: InstrumentType;
-  readonly params: Readonly<Record<string, ParamValue>>;
-}
+export type InstrumentConfig =
+  | { readonly type: (typeof NATIVE_INSTRUMENTS)[number]; readonly params: Readonly<Record<string, ParamValue>> }
+  | { readonly type: 'sf2'; readonly params: { readonly bank: string; readonly program: number } };
 
 export type FxConfig =
   | { readonly type: 'eq3'; readonly lowDb: number; readonly midDb: number; readonly highDb: number; readonly lowHz: number; readonly midHz: number; readonly highHz: number; readonly midQ: number }
@@ -111,6 +111,11 @@ export interface Track {
   readonly mute: boolean;
   readonly fx: readonly FxConfig[];
   readonly automation: readonly AutomationLane[];
+  readonly midi?: {
+    readonly channel: number;
+    readonly program: number;
+    readonly controls: readonly { beat: number; number: 1 | 11; value: number }[];
+  };
   readonly clips: readonly Clip[];
 }
 
@@ -129,11 +134,12 @@ export interface MasterConfig {
 }
 
 export interface Project {
+  readonly sourceAbc?: string;
   readonly format: typeof FORMAT;
   readonly id: string;
   readonly title: string;
   readonly kind: ProjectKind;
-  readonly tempo: { readonly bpm: number; readonly beatsPerBar: number };
+  readonly tempo: { readonly bpm: number; readonly beatsPerBar: number; readonly beatUnit?: number };
   readonly key: { readonly tonic: string; readonly mode: string };
   readonly bars: number;
   readonly loop: boolean;
@@ -296,6 +302,12 @@ export function parseInstrument(ctx: Ctx, raw: unknown, path: string): Instrumen
         else ctx.error(`${path}.params.${k}`, 'must be a number, string or boolean');
       }
   }
+  if (type === 'sf2') {
+    const bank = str(ctx, params, 'bank', path + '.params');
+    const program = num(ctx, params, 'program', path + '.params', 0, 0, 127);
+    if (!Number.isInteger(program)) ctx.error(path + '.params.program', 'must be an integer');
+    return { type, params: { bank, program } };
+  }
   return { type, params };
 }
 
@@ -396,6 +408,25 @@ export const DEFAULT_PAN = Object.fromEntries(
   INSTRUMENTS.map((id) => [id, INSTRUMENT_DEFS[id].defaultPan]),
 ) as Readonly<Record<InstrumentType, number>>;
 
+function parseTrackMidi(ctx: Ctx, raw: unknown, path: string): NonNullable<Track['midi']> {
+  const obj = isObj(raw) ? raw : {};
+  const integer = (item: Obj, key: string, prefix: string, max: number) => {
+    const n = num(ctx, item, key, prefix, undefined, 0, max);
+    if (!Number.isInteger(n)) ctx.error(prefix + '.' + key, 'must be an integer');
+    return n;
+  };
+  return {
+    channel: integer(obj, 'channel', path, 15),
+    program: integer(obj, 'program', path, 127),
+    controls: arr(ctx, obj, 'controls', path).map((point, i) => {
+      const cc = isObj(point) ? point : {};
+      const prefix = path + '.controls[' + i + ']';
+      if (cc.number !== 1 && cc.number !== 11) ctx.error(prefix + '.number', 'expected CC1 or CC11');
+      return { beat: num(ctx, cc, 'beat', prefix, undefined, 0), number: cc.number === 1 ? 1 : 11, value: integer(cc, 'value', prefix, 127) };
+    }),
+  };
+}
+
 export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Track | null {
   if (!isObj(raw)) {
     ctx.error(path, 'track must be an object');
@@ -426,6 +457,7 @@ export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Reado
   return {
     id,
     name: str(ctx, raw, 'name', path, id),
+    ...(raw.midi === undefined ? {} : { midi: parseTrackMidi(ctx, raw.midi, path + '.midi') }),
     role: oneOf(ctx, raw, 'role', path, ROLES, INSTRUMENT_DEFS[instrument.type].defaultRole),
     layer: oneOf(ctx, raw, 'layer', path, LAYERS, 'base'),
     instrument,
@@ -450,7 +482,11 @@ export function parseProject(raw: unknown): ParseResult<Project> {
   const tempo = {
     bpm: num(ctx, tempoRaw, 'bpm', '$.tempo', 120, 20, 300),
     beatsPerBar: num(ctx, tempoRaw, 'beatsPerBar', '$.tempo', 4, 1, 16),
+    ...(tempoRaw.beatUnit === undefined ? {} : { beatUnit: num(ctx, tempoRaw, 'beatUnit', '$.tempo', 4, 1, 32768) }),
   };
+  if (tempo.beatUnit !== undefined && (!Number.isInteger(Math.log2(tempo.beatUnit)) ||
+      !Number.isInteger(tempo.beatsPerBar * tempo.beatUnit / 4) || tempo.beatsPerBar * tempo.beatUnit / 4 > 255))
+    ctx.error('$.tempo.beatUnit', 'expected a power-of-two denominator with an integral numerator up to 255');
   const keyRaw = isObj(raw.key) ? raw.key : {};
   const key = {
     tonic: oneOf(ctx, keyRaw, 'tonic', '$.key', Object.keys(TONICS), 'C'),
@@ -526,6 +562,7 @@ export function parseProject(raw: unknown): ParseResult<Project> {
   });
 
   const project: Project = {
+    ...(raw.sourceAbc !== undefined ? { sourceAbc: str(ctx, raw, 'sourceAbc', '$') } : {}),
     format: FORMAT,
     id: str(ctx, raw, 'id', '$', 'untitled'),
     title: typeof raw.title === 'string' ? raw.title : str(ctx, raw, 'id', '$', 'untitled'),

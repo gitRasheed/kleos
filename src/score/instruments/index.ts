@@ -7,7 +7,7 @@ import { piano } from './piano.js';
 import { stringsBass, stringsCello, stringsEnsemble } from './strings.js';
 import { cinematicSfx, synthBass, synthPad } from './synth.js';
 
-export const INSTRUMENT_MODELS: Readonly<Record<InstrumentType, Instrument>> = {
+export const INSTRUMENT_MODELS: Readonly<Record<Exclude<InstrumentType, 'sf2'>, Instrument>> = {
   piano,
   'brass-horn': brassHorn,
   'brass-trumpet': brassTrumpet,

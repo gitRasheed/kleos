@@ -1,0 +1,92 @@
+%abc-2.1
+X:1
+T:Symphony No. 40 in G Minor, K. 550, I
+C:Wolfgang Amadeus Mozart
+M:C|
+L:1/8
+Q:1/4=180
+V:P1v1 name="Flauto" clef=treble transpose=0
+V:P2v1 name="Oboi" clef=treble transpose=0
+V:P3v1 name="Clarinetti in B 1" clef=treble transpose=-2
+V:P3v2 name="Clarinetti in B 2" clef=treble transpose=-2
+V:P4v1 name="Fagotti 1" clef=bass transpose=0
+V:P4v2 name="Fagotti 2" clef=bass transpose=0
+V:P5v1 name="Corno in B" clef=treble transpose=-2
+V:P6v1 name="Corno in G" clef=treble transpose=-5
+V:P7v1 name="Violino I" clef=treble transpose=0
+V:P8v1 name="Violino II" clef=treble transpose=0
+V:P9v1 name="Viola 1" clef=alto transpose=0
+V:P9v2 name="Viola 2" clef=alto transpose=0
+V:P10v1 name="Violoncello" clef=bass transpose=0
+V:P11v1 name="Contrabasso" clef=bass transpose=-12
+K:Gm
+[V:P1v1] z8 | z8 | z8 | z8 |
+[V:P1v1] z8 | z8 | z8 | z8 |
+[V:P1v1] z8 | z8 | z8 | z8 |
+[V:P1v1] z8 | z2 !p!(^f2 g2 a2 | b2 c'b a2 g2 | ^f2) z2 !f!(^c'4 |
+[V:P1v1] d'2) z2 (^c'4 | d'2) z2 (^c'4 | .d'2) .^c'2 .d'2 .c'2 | d'4 z4 |]
+[V:P2v1] z8 | z8 | z8 | z8 |
+[V:P2v1] z8 | z8 | z8 | z8 |
+[V:P2v1] z8 | z8 | z8 | z8 |
+[V:P2v1] z8 | z8 | z8 | z4 !f!([gb]4 |
+[V:P2v1] [^fa]2) z2 ([gb]4 | [^fa]2) z2 ([gb]4 | .[^fa]2) .[gb]2 .[fa]2 .[gb]2 | [^fa]4 z4 |]
+[V:P3v1] [K:Am] z8 | z8 | z8 | z8 |
+[V:P3v1] z8 | z8 | z8 | z8 |
+[V:P3v1] z8 | z8 | z8 | z8 |
+[V:P3v1] z8 | z2 !p!(^G2 A2 B2 | c2 dc B2 A2 | ^G2) z2 !f!([^d^f]4 |
+[V:P3v1] [e^g]2) z2 ([^d^f]4 | [e^g]2) z2 ([^d^f]4 | .[e^g]2) .[^d^f]2 .[eg]2 .[df]2 | [e^g]4 z4 |]
+[V:P3v2] [K:Am] x8 | x8 | x8 | x8 |
+[V:P3v2] x8 | x8 | x8 | x8 |
+[V:P3v2] x8 | x8 | x8 | x8 |
+[V:P3v2] x8 | z8 | z8 | z4 x4 |
+[V:P3v2] x8 | x8 | x8 | x8 |]
+[V:P4v1] z8 | z8 | z8 | z8 |
+[V:P4v1] z8 | z8 | z8 | z8 |
+[V:P4v1] z8 | z8 | z8 | z8 |
+[V:P4v1] z8 | z2 !p!(^F,2 G,2 A,2 | B,2 CB, A,2 G,2 | ^F,2) z2 !f!([B,=E]4 |
+[V:P4v1] [A,^F]2) z2 ([B,=E]4 | [A,^F]2) z2 ([B,=E]4 | .[A,^F]2) .[B,=E]2 .[A,F]2 .[B,E]2 | (^F4 !p!C4 |]
+[V:P4v2] x8 | x8 | x8 | x8 |
+[V:P4v2] x8 | x8 | x8 | x8 |
+[V:P4v2] x8 | x8 | x8 | x8 |
+[V:P4v2] x8 | z8 | z8 | z4 x4 |
+[V:P4v2] x8 | x8 | x8 | (A,8 |]
+[V:P5v1] [K:Am] z8 | z8 | z8 | z8 |
+[V:P5v1] z8 | z8 | z8 | z8 |
+[V:P5v1] z8 | z8 | z8 | z8 |
+[V:P5v1] z8 | z8 | z8 | z4 !f!(c4 |
+[V:P5v1] e2) z2 (c4 | e2) z2 (c4 | .e2) .c2 .e2 .c2 | e4 z4 |]
+[V:P6v1] [K:Cm] z8 | z8 | z8 | z8 |
+[V:P6v1] z8 | z8 | z8 | z8 |
+[V:P6v1] z8 | z8 | z8 | z8 |
+[V:P6v1] z8 | z8 | z8 | z4 !f!(c4 |
+[V:P6v1] d2) z2 (c4 | d2) z2 (c4 | .d2) .c2 .d2 .c2 | d4 z4 |]
+[V:P7v1] z4 z2 !p!(ed) | "^portato"d2 (ed) "^portato"d2 (ed) | (d2 b2) z2 (ba) | "^portato"g2 (gf) "^portato"e2 (ed) |
+[V:P7v1] "^portato"c2 c2 z2 (dc) | "^portato"c2 (dc) "^portato"c2 (dc) | (c2 a2) z2 (ag) | "^portato"^f2 (fe) "^portato"d2 (dc) |
+[V:P7v1] "^portato"B2 B2 z2 (ba) | (a2 c'2 ^f2 a2) | (g2 d2) z2 (ba) | (a2 c'2 ^f2 a2) |
+[V:P7v1] (g2 b2 agfe) | (d8 | ^c8 | d4) z2 !f!.D.D |
+[V:P7v1] "^portato"D4 z2 .D.D | "^portato"D4 z2 .D.D | "^portato"D2 .D.D "^portato"D2 .D.D | D4 z2 !p!(ed) |]
+[V:P8v1] z4 z2 !p!(ED) | "^portato"D2 (ED) "^portato"D2 (ED) | (D2 B2) z2 (BA) | "^portato"G2 (GF) "^portato"E2 (ED) |
+[V:P8v1] "^portato"C2 C2 z2 (DC) | "^portato"C2 (DC) "^portato"C2 (DC) | (C2 A2) z2 (AG) | "^portato"^F2 (FE) "^portato"D2 (DC) |
+[V:P8v1] "^portato"B,2 B,2 z2 (BA) | (A2 c2 ^F2 A2) | (G2 D2) z2 (BA) | (A2 c2 ^F2 A2) |
+[V:P8v1] (G2 B2 AGFE) | (D8 | ^C8 | D4) z2 !f!.D.D |
+[V:P8v1] "^portato"D4 z2 .D.D | "^portato"D4 z2 .D.D | "^portato"D2 .D.D "^portato"D2 .D.D | D4 z2 !p!(ED) |]
+[V:P9v1] !p!.B,.B,.G.G .B,.B,.G.G | .B,.B,.G.G .B,.B,.G.G | .B,.B,.G.G .B,.B,.G.G | .B,.B,.D.D .B,.B,.G.G |
+[V:P9v1] .E.E.A.A .E.E.A.A | .E.E.A.A .E.E.A.A | .D.D.c.c .D.D.c.c | .C.C.A.A .^F.F.A.A |
+[V:P9v1] .D.D.G.G .D.D.G.G | .E.E.^F.F .E.E.F.F | .D.D.G.G .D.D.G.G | .E.E.^F.F .E.E.F.F |
+[V:P9v1] [G,D]8 | (B,6 A,2 | G,4 ^F,2 G,2 | A,4) z2 !f!.D.D |
+[V:P9v1] "^portato"D4 z2 .D.D | "^portato"D4 z2 .D.D | "^portato"D2 .D.D "^portato"D2 .D.D | D4 z4 |]
+[V:P9v2] !p!.G,.G,.B,.B, .G,.G,.B,.B, | .G,.G,.B,.B, .G,.G,.B,.B, | .G,.G,.D.D .G,.G,.D.D | .G,.G,.B,.B, .G,.G,.B,.B, |
+[V:P9v2] .A,.A,.E.E .A,.A,.E.E | .A,.A,.E.E .A,.A,.E.E | .A,.A,.D.D .A,.A,.D.D | .A,.A,.C.C .A,.A,.^F.F |
+[V:P9v2] .G,.G,.D.D .G,.G,.D.D | .A,.A,.E.E .A,.A,.E.E | .G,.G,.D.D .G,.G,.D.D | .A,.A,.E.E .A,.A,.E.E |
+[V:P9v2] x8 | x8 | x8 | x8 |
+[V:P9v2] x8 | x8 | x8 | x8 |]
+[V:P10v1] !p!G,,2 z2 z4 | G,2 z2 z4 | G,,2 z2 z4 | G,2 z2 z4 |
+[V:P10v1] G,,2 z2 z4 | G,2 z2 z4 | ^F,,2 z2 z4 | D,2 z2 z4 |
+[V:P10v1] G,,2 z2 z4 | (C,8 | B,,8 | C,8 |
+[V:P10v1] B,,8) | (=E,8 | E,8 | D,4) z2 !f!.D,.D, |
+[V:P10v1] "^portato"D,4 z2 .D,.D, | "^portato"D,4 z2 .D,.D, | "^portato"D,2 .D,.D, "^portato"D,2 .D,.D, | D,4 z4 |]
+[V:P11v1] !p!G,,2 z2 z4 | G,2 z2 z4 | G,,2 z2 z4 | G,2 z2 z4 |
+[V:P11v1] G,,2 z2 z4 | G,2 z2 z4 | ^F,,2 z2 z4 | D,2 z2 z4 |
+[V:P11v1] G,,2 z2 z4 | (C,8 | B,,8 | C,8 |
+[V:P11v1] B,,8) | (=E,8 | E,8 | D,4) z2 !f!.D,.D, |
+[V:P11v1] "^portato"D,4 z2 .D,.D, | "^portato"D,4 z2 .D,.D, | "^portato"D,2 .D,.D, "^portato"D,2 .D,.D, | D,4 z4 |]

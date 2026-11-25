@@ -64,6 +64,7 @@ const guitar = (gmProgram: number) => instrument([40, 88], [40, 82], '-8P', 'tre
 
 export const INSTRUMENT_DEFS = {
   ...orchestra,
+  sf2: { ...keyboard(0), defaultRole: 'harmony', defaultPan: 0 },
   piano: { ...orchestra.piano, defaultRole: 'harmony', defaultPan: 0 },
   'brass-horn': { ...orchestra['horn-F'], defaultRole: 'lead', defaultPan: -0.15 },
   'brass-trumpet': { ...orchestra['trumpet-C'], defaultRole: 'lead', defaultPan: 0.2 },

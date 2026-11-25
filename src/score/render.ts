@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { renderPcmSf2 } from '../notation/sf2Adapter.js';
+import { exportMidi } from './midi.js';
 import { SAMPLE_RATE, addInto, clamp, dbToGain, gainToDb, hashString, makeRng, midiToHz, panGains, stereo, svfG, svfStep, type Stereo } from './dsp.js';
 import { applyFx, type FxContext } from './fx.js';
 import { INSTRUMENT_MODELS } from './instruments/index.js';
@@ -6,6 +10,7 @@ import { masterBus, masterStem, type MasterStats } from './master.js';
 import { expandTrackNotes, loopFrames, type AutomationLane, type Layer, type Project, type Track } from './project.js';
 
 export interface RenderOptions {
+  readonly projectDir?: string;
   // Only tracks on these layers are rendered; default is every layer.
   readonly layers?: readonly Layer[];
   // Only these track ids are rendered, muted or not; default is every unmuted track.
@@ -76,12 +81,22 @@ function automationValue(lane: AutomationLane, beat: number): number {
   return last.value;
 }
 
-function renderDry(p: Project, t: Track, frames: number): { readonly buf: Stereo; readonly notes: number } {
+function renderDry(p: Project, t: Track, frames: number, projectDir: string): { readonly buf: Stereo; readonly notes: number } {
   const sr = p.sampleRate;
   const spb = secondsPerBeat(p);
-  const model = INSTRUMENT_MODELS[t.instrument.type];
   const buf = stereo(frames);
   const notes = expandTrackNotes(p, t);
+  if (t.instrument.type === 'sf2') {
+    const { bank, program } = t.instrument.params;
+    const track = { ...t, gainDb: 0, pan: 0, midi: { program, channel: 0, controls: t.midi?.controls ?? [] } };
+    const midi = exportMidi({ ...p, tracks: [track] });
+    const tail = p.loop ? 3 : Math.max(0, (frames - projectFrames(p, 0)) / sr);
+    const pcm = renderPcmSf2(midi, readFileSync(resolve(projectDir, bank)), sr, tail, program);
+    addInto(buf.left, pcm.left, 0, 1, p.loop);
+    addInto(buf.right, pcm.right, 0, 1, p.loop);
+    return { buf, notes: notes.length };
+  }
+  const model = INSTRUMENT_MODELS[t.instrument.type];
   // A note slurs when an earlier-starting note is still sounding (or just ended) at its onset; chord tones do not.
   let endBefore = -Infinity;
   let groupStart = -Infinity;
@@ -128,8 +143,7 @@ function processTrack(p: Project, t: Track, dry: Stereo): Stereo {
     work.left.set(dry.left, k * n);
     work.right.set(dry.right, k * n);
   }
-  const model = INSTRUMENT_MODELS[t.instrument.type];
-  model.post?.(work, t.instrument.params);
+  if (t.instrument.type !== 'sf2') INSTRUMENT_MODELS[t.instrument.type].post?.(work, t.instrument.params);
   const beatOf = (i: number): number => ((i % n) / sr) / spb;
   for (const lane of t.automation.filter((a) => a.param === 'cutoff')) {
     const sl = { ic1: 0, ic2: 0 };
@@ -160,9 +174,9 @@ function processTrack(p: Project, t: Track, dry: Stereo): Stereo {
   return out;
 }
 
-export function renderTrack(p: Project, t: Track, tailS = 3): { readonly audio: Stereo; readonly notes: number } {
+export function renderTrack(p: Project, t: Track, tailS = 3, projectDir = '.'): { readonly audio: Stereo; readonly notes: number } {
   const frames = projectFrames(p, tailS);
-  const dry = renderDry(p, t, frames);
+  const dry = renderDry(p, t, frames, projectDir);
   return { audio: processTrack(p, t, dry.buf), notes: dry.notes };
 }
 
@@ -178,7 +192,7 @@ export function renderProject(p: Project, opts: RenderOptions = {}): RenderResul
   for (const t of p.tracks) {
     const picked = opts.trackIds === undefined ? !t.mute : opts.trackIds.includes(t.id);
     if (!picked || (opts.layers !== undefined && !opts.layers.includes(t.layer))) continue;
-    const { audio, notes } = renderTrack(p, t, opts.tailS ?? 3);
+    const { audio, notes } = renderTrack(p, t, opts.tailS ?? 3, opts.projectDir);
     const stem = (stems[t.layer] ??= stereo(frames));
     let peak = 0;
     let energy = 0;

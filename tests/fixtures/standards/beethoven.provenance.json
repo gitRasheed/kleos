@@ -1,0 +1,9 @@
+{
+  "work": "Beethoven Symphony No. 5, Op. 67, I",
+  "bars": "1–21",
+  "composition": "Public domain",
+  "transcriptionLicense": "CC0-1.0",
+  "source": "https://gitlab.com/algomus.fr/orchestration/-/blob/b1060529b96b1544ab7d2b52fda12b44a4d093bb/scores/beethoven/beethoven_op67-1.mscz",
+  "sourceSha256": "4e3357c4765fe827b16e4b3ca5cb4a25958d12e9633e669ca311d9c09147c2cb",
+  "notes": "omega13a. Exported with MuseScore 3.6.2. The ABC omits parts silent throughout the excerpt."
+}

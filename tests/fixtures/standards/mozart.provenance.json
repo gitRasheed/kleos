@@ -1,0 +1,9 @@
+{
+  "work": "Mozart Symphony No. 40, K. 550, I",
+  "bars": "1–20",
+  "composition": "Public domain",
+  "transcriptionLicense": "CC0-1.0",
+  "source": "https://gitlab.com/algomus.fr/orchestration/-/blob/b1060529b96b1544ab7d2b52fda12b44a4d093bb/scores/mozart/k550-1.musicxml",
+  "sourceSha256": "9ed46086166ac016586150247d06636e30ced3f0f4b3926c2ba3ea4133e50b5a",
+  "notes": "Version with clarinets. The ABC splits divided parts into named voices. Original engraving: https://musescore.com/user/6725176/scores/3291171"
+}

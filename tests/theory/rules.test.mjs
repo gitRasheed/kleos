@@ -158,7 +158,7 @@ test('orchestral and DAW instrument profiles have nested ranges, valid MIDI prog
     Object.keys(INSTRUMENT_DEFS).sort(),
     [
       'brass-horn', 'brass-trumpet', 'strings-ensemble', 'strings-cello', 'strings-bass',
-      'guitar-electric', 'guitar-acoustic', 'orchestral-perc', 'synth-pad', 'synth-bass', 'cinematic-sfx',
+      'guitar-electric', 'guitar-acoustic', 'orchestral-perc', 'synth-pad', 'synth-bass', 'cinematic-sfx', 'sf2',
       'violin-I',
       'violin-II',
       'viola',

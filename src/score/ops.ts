@@ -11,6 +11,7 @@ import { renderProject, tile } from './render.js';
 import { readWav, readWavFile, writeWav, type BitDepth } from '../io/wav.js';
 
 export interface RenderFilesOptions {
+  readonly projectDir?: string;
   readonly out: string;
   readonly bitDepth?: BitDepth;
   readonly stemsDir?: string;
@@ -21,7 +22,7 @@ export interface RenderFilesOptions {
 
 export function renderToFiles(p: Project, o: RenderFilesOptions): Record<string, unknown> {
   const t0 = performance.now();
-  const r = renderProject(p, { ...(o.layers !== undefined ? { layers: o.layers } : {}), ...(o.trackIds !== undefined ? { trackIds: o.trackIds } : {}) });
+  const r = renderProject(p, o);
   const bitDepth = o.bitDepth ?? 24;
   writeWav(o.out, { sampleRate: p.sampleRate, channels: [r.mix.left, r.mix.right] }, bitDepth);
   const written: string[] = [o.out];

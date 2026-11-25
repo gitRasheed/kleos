@@ -8,7 +8,7 @@ Version 0.2.0. The package is not published to npm, so build it from source or i
 
 ## Install
 
-Requires Node 20 or later.
+Requires Node 20.12 or later. The MusicXML schema tests use `xmllint` (the `libxml2-utils` package on Ubuntu).
 
 ```bash
 npm ci
@@ -187,15 +187,21 @@ Each low subscore includes advice, for example "End the loop on a V (major, with
 
 ## MCP server
 
-`node dist/cli.js mcp` speaks newline-delimited JSON-RPC 2.0 on stdio with 16 tools: `project_init`, `project_validate`, `project_dump`, `add_track`, `remove_track`, `add_clip`, `add_notes`, `set_instrument`, `add_fx`, `add_automation`, `render`, `edit`, `analyse`, `check`, `gate`, `export_midi`. Every edit re-validates the whole project before it is saved.
+`node dist/cli.js mcp` speaks newline-delimited JSON-RPC 2.0 on stdio. Its tools are `project_init`, `project_validate`, `project_dump`, `add_track`, `remove_track`, `add_clip`, `add_notes`, `set_instrument`, `add_fx`, `add_automation`, `render`, `edit`, `analyse`, `check`, `gate`, `lint`, `import_abc`, `export_abc`, `import_midi`, `export_midi` and `export_musicxml`. Every edit re-validates the whole project before it is saved.
 
 ```json
 { "mcpServers": { "agent-daw": { "command": "node", "args": ["<repo>/dist/cli.js", "mcp"] } } }
 ```
 
-## MIDI
+## Score interchange
 
 `export-midi` writes SMF type 1 at 480 PPQ: a conductor track (tempo, meter, key signature, section markers), then one track per instrument with GM program, volume, pan, notes and pitch-wheel sweeps (bend range set to 12 semitones). Orchestral percussion goes on channel 10.
+
+Use `import-abc tune.abc --out cue.json` to create a playable project. `export-abc cue.json --out tune.abc` and `export-musicxml cue.json --out score.musicxml` write one part per track. An ABC import keeps the source notation, including ties, fermatas and written transpositions. After a change to the notes, the exporter engraves the current concert pitches.
+
+`import-midi cue.mid --out cue.json` imports Type 1 MIDI with PPQ timing and one channel and patch per track. `--into cue.json` replaces clips on matching tracks and keeps their instruments, FX, automation, mix and mastering. Named parts match by track name or ID, unnamed parts match by position, and new parts append. The project uses one tempo, meter and key. The library functions `readMidiFile` and `writeMidiFile` also handle changing conductor maps, nondefault PPQ, modulation (CC1) and expression (CC11).
+
+For sampled playback, set a track's instrument to `{"type":"sf2","params":{"bank":"strings.sf2","program":48}}`. The CLI resolves the bank relative to the project file. For in-memory projects, pass the bank directory to `renderProject(project, { projectDir })`. Use an uncompressed PCM SoundFont with the requested melodic program in bank 0. Track effects, automation, pan and mastering also apply to sampled tracks.
 
 ## Develop
 

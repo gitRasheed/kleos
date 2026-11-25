@@ -1,7 +1,8 @@
+import { Key } from 'tonal';
 import { INSTRUMENT_DEFS } from '../theory/instruments.js';
 import { expandTrackNotes, tonicPc, type Project } from './project.js';
-
-export const PPQ = 480;
+import { PPQ } from '../notation/conductor.js';
+export { PPQ };
 
 function vlq(n: number): number[] {
   const bytes = [n & 0x7f];
@@ -19,7 +20,7 @@ interface TimedEvent {
   readonly bytes: readonly number[];
 }
 
-function trackChunk(events: TimedEvent[]): number[] {
+function trackChunk(events: TimedEvent[], endTick = 0): number[] {
   events.sort((a, b) => a.tick - b.tick || a.order - b.order);
   const body: number[] = [];
   let last = 0;
@@ -27,7 +28,7 @@ function trackChunk(events: TimedEvent[]): number[] {
     body.push(...vlq(e.tick - last), ...e.bytes);
     last = e.tick;
   }
-  body.push(0, 0xff, 0x2f, 0x00);
+  body.push(...vlq(Math.max(0, endTick - last)), 0xff, 0x2f, 0x00);
   return [0x4d, 0x54, 0x72, 0x6b, (body.length >>> 24) & 0xff, (body.length >>> 16) & 0xff, (body.length >>> 8) & 0xff, body.length & 0xff, ...body];
 }
 
@@ -37,9 +38,11 @@ function text(type: number, s: string): number[] {
 }
 
 // MIDI key signature: sharps/flats count of the relative major, plus a minor flag.
-function keySignature(p: Project): [number, number] {
+export function keySignature(p: Project): [number, number] {
   const minorModes = new Set(['minor', 'aeolian', 'dorian', 'phrygian', 'harmonic-minor']);
   const minor = minorModes.has(p.key.mode);
+  const spelling = minor ? Key.minorKey(p.key.tonic) : Key.majorKey(p.key.tonic);
+  if (Math.abs(spelling.alteration) <= 7) return [spelling.alteration, minor ? 1 : 0];
   const majorPc = minor ? (tonicPc(p) + 3) % 12 : tonicPc(p);
   const fifths = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5][majorPc] ?? 0;
   return [fifths, minor ? 1 : 0];
@@ -48,28 +51,34 @@ function keySignature(p: Project): [number, number] {
 export function exportMidi(p: Project): Uint8Array {
   const tempo = Math.round(60_000_000 / p.tempo.bpm);
   const [sf, mi] = keySignature(p);
+  const beatUnit = p.tempo.beatUnit ?? 4;
   const conductor: TimedEvent[] = [
     { tick: 0, order: 0, bytes: text(0x03, p.title) },
     { tick: 0, order: 1, bytes: [0xff, 0x51, 0x03, (tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff] },
-    { tick: 0, order: 2, bytes: [0xff, 0x58, 0x04, p.tempo.beatsPerBar, 2, 24, 8] },
+    { tick: 0, order: 2, bytes: [0xff, 0x58, 0x04, p.tempo.beatsPerBar * beatUnit / 4, Math.log2(beatUnit), 24, 8] },
     { tick: 0, order: 3, bytes: [0xff, 0x59, 0x02, sf & 0xff, mi] },
   ];
   p.sections.forEach((s, i) => conductor.push({ tick: s.startBar * p.tempo.beatsPerBar * PPQ, order: 10 + i, bytes: text(0x06, s.id) }));
-  const chunks = [trackChunk(conductor)];
+  const endTick = p.tempo.beatUnit === undefined ? 0 : Math.round(p.bars * p.tempo.beatsPerBar * PPQ);
+  const chunks = [trackChunk(conductor, endTick)];
   let nextChannel = 0;
   for (const t of p.tracks) {
     const drums = t.instrument.type === 'orchestral-perc';
-    const ch = drums ? 9 : nextChannel;
+    const ch = t.midi?.channel ?? (drums ? 9 : nextChannel);
+    const program = t.instrument.type === 'sf2' ? t.instrument.params.program : t.midi?.program ?? INSTRUMENT_DEFS[t.instrument.type].gmProgram;
     if (!drums) nextChannel = nextChannel + 1 === 9 ? 10 : (nextChannel + 1) % 16;
     const events: TimedEvent[] = [
       { tick: 0, order: 0, bytes: text(0x03, t.name) },
-      { tick: 0, order: 1, bytes: [0xc0 | ch, INSTRUMENT_DEFS[t.instrument.type].gmProgram] },
+      { tick: 0, order: 1, bytes: [0xc0 | ch, program] },
       { tick: 0, order: 2, bytes: [0xb0 | ch, 7, Math.max(0, Math.min(127, Math.round(100 * Math.pow(10, t.gainDb / 40))))] },
       { tick: 0, order: 3, bytes: [0xb0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + t.pan * 63)))] },
     ];
     // Pitch-bend range of 12 semitones (RPN 0) so per-note bends up to an octave export faithfully.
     const rpn: readonly (readonly [number, number])[] = [[101, 0], [100, 0], [6, 12], [38, 0]];
     rpn.forEach(([cc, v], i) => events.push({ tick: 0, order: 5 + i, bytes: [0xb0 | ch, cc, v] }));
+    for (const cc of t.midi?.controls ?? []) {
+      events.push({ tick: Math.round(cc.beat * PPQ), order: 9, bytes: [0xb0 | ch, cc.number, cc.value] });
+    }
     for (const n of expandTrackNotes(p, t)) {
       const on = Math.round(n.startBeat * PPQ);
       const off = Math.max(on + 1, Math.round((n.startBeat + n.durationBeats) * PPQ));

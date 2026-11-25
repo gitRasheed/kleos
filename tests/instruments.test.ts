@@ -5,7 +5,7 @@ import { INSTRUMENT_MODELS } from '../src/score/instruments/index.js';
 import type { NoteEvent } from '../src/score/instruments/common.js';
 import { pluck, tubeAmp } from '../src/score/instruments/guitar.js';
 import { pianoInharmonicity, pianoPartialFreq } from '../src/score/instruments/piano.js';
-import { INSTRUMENTS, type Articulation } from '../src/score/project.js';
+import { NATIVE_INSTRUMENTS, type Articulation } from '../src/score/project.js';
 import { renderTrack } from '../src/score/render.js';
 import { SR, cents, centroid, mono, peakHz, project, rmsOf, sine, track } from './helpers.js';
 
@@ -14,7 +14,7 @@ function ev(midi: number, velocity = 0.8, durationS = 1, articulation: Articulat
 }
 
 test('every instrument renders a finite, audible note that ends quieter than it peaks', () => {
-  for (const type of INSTRUMENTS) {
+  for (const type of NATIVE_INSTRUMENTS) {
     const midi = type === 'orchestral-perc' ? 38 : type.includes('bass') || type === 'timpani' ? 40 : 62;
     const out = INSTRUMENT_MODELS[type].render(ev(midi), type === 'cinematic-sfx' ? { preset: 'chime' } : {});
     const m = mono(out);
