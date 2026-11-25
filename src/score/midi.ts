@@ -1,23 +1,7 @@
-import { expandTrackNotes, tonicPc, type InstrumentType, type Project } from './project.js';
+import { INSTRUMENT_DEFS } from '../theory/instruments.js';
+import { expandTrackNotes, tonicPc, type Project } from './project.js';
 
 export const PPQ = 480;
-
-// General MIDI programs, so an exported file previews sensibly in any GM player.
-const GM_PROGRAM: Readonly<Record<InstrumentType, number>> = {
-  piano: 0,
-  'brass-horn': 60,
-  'brass-trumpet': 56,
-  'strings-ensemble': 48,
-  'strings-cello': 42,
-  'strings-bass': 43,
-  'guitar-electric': 30,
-  'guitar-acoustic': 25,
-  timpani: 47,
-  'orchestral-perc': 0,
-  'synth-pad': 89,
-  'synth-bass': 38,
-  'cinematic-sfx': 98,
-};
 
 function vlq(n: number): number[] {
   const bytes = [n & 0x7f];
@@ -79,7 +63,7 @@ export function exportMidi(p: Project): Uint8Array {
     if (!drums) nextChannel = nextChannel + 1 === 9 ? 10 : (nextChannel + 1) % 16;
     const events: TimedEvent[] = [
       { tick: 0, order: 0, bytes: text(0x03, t.name) },
-      { tick: 0, order: 1, bytes: [0xc0 | ch, GM_PROGRAM[t.instrument.type]] },
+      { tick: 0, order: 1, bytes: [0xc0 | ch, INSTRUMENT_DEFS[t.instrument.type].gmProgram] },
       { tick: 0, order: 2, bytes: [0xb0 | ch, 7, Math.max(0, Math.min(127, Math.round(100 * Math.pow(10, t.gainDb / 40))))] },
       { tick: 0, order: 3, bytes: [0xb0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + t.pan * 63)))] },
     ];

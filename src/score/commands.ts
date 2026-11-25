@@ -6,6 +6,7 @@ import { ToolError, findTool, readProject } from '../tools.js';
 export const SCORE_USAGE = `Project
   init <project.json> --id <id> [--bpm 120 --bars 16 --tonic D --mode minor --kind loop --target-lufs -16]
   validate <project.json>
+  lint <score.json> [--style strict|free]
   dump <project.json> [--full]
   add-track <project.json> --track '<json>'
   remove-track <project.json> --track-id <id>
@@ -116,6 +117,11 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
     return callTool(tool, args);
   }
   switch (cmd) {
+    case 'lint': {
+      if (first === undefined || positional.length !== 1 || [...flags.keys()].some(k => k !== 'style') || (flags.get('style')?.length ?? 0) > 1)
+        throw new ToolError('Usage: lint <score.json> [--style strict|free]');
+      return callTool('lint', { score: first, style: flags.get('style')?.[0] });
+    }
     case 'critique': {
       if (first === undefined) throw new ToolError('critique needs a project path');
       const result = critiqueProject(readProject(first));

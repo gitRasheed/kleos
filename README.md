@@ -1,6 +1,6 @@
 # agent-audio
 
-Render JSON recipes and orchestral scores to WAV. Check the result for BS.1770-4 loudness, true peak, clicks, cut tails, DC offset, stereo phase, loop seams, and advisory aliasing and quiet-tail warnings. It can gate a whole folder at once and check the headroom of several sounds mixed together. It is written in TypeScript with no runtime dependencies and is built for coding agents, which cannot listen to their own output.
+Render JSON recipes and orchestral scores to WAV. Check the result for BS.1770-4 loudness, true peak, clicks, cut tails, DC offset, stereo phase, loop seams, and advisory aliasing and quiet-tail warnings. It can gate a whole folder at once and check the headroom of several sounds mixed together. The score linter uses Tonal to check instrument ranges and voice leading before rendering.
 
 ## Status
 
@@ -156,6 +156,16 @@ Loops are rendered so the wrap is inaudible:
 The render summary gives each track `peak`, `lufs` (integrated, BS.1770) and `rmsDbfs`, measured where the track enters the master bus. `warnings` holds a `trackBalance` line for each track more than 16 LU below the loudest one. The warning is advisory and never changes the exit code.
 
 `render --stems-dir` writes one WAV per layer. Each stem gets the master's high-pass and the bus compressor's per-frame gain curve (taken from the full mix), so the stems sum to the master before the limiter, to within 1e-9. The limiter is the only stage the sum lacks; it took 0 dB off the demo, whose stem sum gates identically to the master.
+
+## Music theory lint
+
+Run `agent-audio lint <score.json> [--style strict|free]` or call the MCP tool `lint` with a `score` path and optional `style`. Each finding includes its rule code, severity, track ID, voice, and one-based bar and beat. The CLI exits with 0 for a clean score or warnings alone, 1 for error findings, and 2 for bad input.
+
+DAW projects tagged `agent-daw/v1` or `agent-audio/score/v1` use their expanded clips at MIDI export resolution (480 ticks per beat). Lint follows track order, highest voice first, and skips muted tracks, unpitched percussion and cinematic effects. Velocities supply dynamics. DAW pitches are concert MIDI numbers, spelled using the project key.
+
+For written pitches, changing meters or explicit chord symbols, supply a theory score directly. Give each track an `id`, `voice`, `instrument` and `bars`. Each bar contains sequential events with integer `ticks` and an array of spelled `pitches` (empty for a rest). Set `ticksPerBeat` and give each measure's length in `beatsPerBar`. Optional fields include a spelled `tonic`, `harmony` entries with `bar`, `beat` and `chord`, and a track's `pitchBasis: "written"` for transposing instruments.
+
+The CLI uses the score's style, defaulting to `free`. Strict style treats parallel fifths and octaves, voice crossing, spacing, doubled leading tones and unresolved sevenths as errors. Free style warns and recognizes explicit octave doublings tagged with the same `doublingGroup`. Bar duration, hard range and monophony violations are errors in both styles.
 
 ## Symbolic critic (`critique`, MCP `analyse` with `project`)
 

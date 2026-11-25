@@ -1,3 +1,4 @@
+import { INSTRUMENT_DEFS } from '../theory/instruments.js';
 import fs from 'node:fs';
 import { SAMPLE_RATE } from './dsp.js';
 
@@ -391,38 +392,9 @@ export function parseAutomation(ctx: Ctx, raw: unknown, path: string): Automatio
   return { param, points: points.sort((a, b) => a.beat - b.beat) };
 }
 
-const DEFAULT_ROLE: Readonly<Record<InstrumentType, Role>> = {
-  piano: 'harmony',
-  'brass-horn': 'lead',
-  'brass-trumpet': 'lead',
-  'strings-ensemble': 'harmony',
-  'strings-cello': 'counter',
-  'strings-bass': 'bass',
-  'guitar-electric': 'counter',
-  'guitar-acoustic': 'harmony',
-  timpani: 'percussion',
-  'orchestral-perc': 'percussion',
-  'synth-pad': 'pad',
-  'synth-bass': 'bass',
-  'cinematic-sfx': 'fx',
-};
-
-export const DEFAULT_PAN: Readonly<Record<InstrumentType, number>> = {
-  piano: 0,
-  'brass-horn': -0.15,
-  'brass-trumpet': 0.2,
-  // Orchestral seating from the conductor's view: violins left, cellos right, basses just right of centre.
-  'strings-ensemble': -0.45,
-  'strings-cello': 0.4,
-  'strings-bass': 0.12,
-  'guitar-electric': 0,
-  'guitar-acoustic': -0.25,
-  timpani: 0.2,
-  'orchestral-perc': 0,
-  'synth-pad': 0,
-  'synth-bass': 0,
-  'cinematic-sfx': 0,
-};
+export const DEFAULT_PAN = Object.fromEntries(
+  INSTRUMENTS.map((id) => [id, INSTRUMENT_DEFS[id].defaultPan]),
+) as Readonly<Record<InstrumentType, number>>;
 
 export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Track | null {
   if (!isObj(raw)) {
@@ -454,7 +426,7 @@ export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Reado
   return {
     id,
     name: str(ctx, raw, 'name', path, id),
-    role: oneOf(ctx, raw, 'role', path, ROLES, DEFAULT_ROLE[instrument.type]),
+    role: oneOf(ctx, raw, 'role', path, ROLES, INSTRUMENT_DEFS[instrument.type].defaultRole),
     layer: oneOf(ctx, raw, 'layer', path, LAYERS, 'base'),
     instrument,
     gainDb: num(ctx, raw, 'gainDb', path, 0, -60, 12),

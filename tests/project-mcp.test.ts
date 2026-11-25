@@ -115,7 +115,7 @@ async function roundTrip(c: McpClient, dir: string, proj: string): Promise<void>
   c.notify('notifications/initialized');
   const list = await c.request('tools/list');
   const names = (list.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['add_automation', 'add_clip', 'add_fx', 'add_notes', 'add_track', 'analyse', 'check', 'edit', 'export_midi', 'gate', 'project_dump', 'project_init', 'project_validate', 'remove_track', 'render', 'set_instrument'].sort());
+  assert.deepEqual(names, ['add_automation', 'add_clip', 'add_fx', 'add_notes', 'add_track', 'analyse', 'check', 'edit', 'export_midi', 'gate', 'lint', 'project_dump', 'project_init', 'project_validate', 'remove_track', 'render', 'set_instrument'].sort());
 
   assert.equal((await c.call('project_init', { project: proj, id: 'cue', bars: 2, bpm: 120, tonic: 'D', mode: 'minor' })).isError, false);
   assert.equal((await c.call('add_track', { project: proj, track: { id: 'horn', instrument: 'brass-horn', role: 'lead' } })).isError, false);

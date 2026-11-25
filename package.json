@@ -1,7 +1,7 @@
 {
   "name": "agent-audio",
   "version": "0.2.0",
-  "description": "Zero-dependency headless audio renderer and deterministic listening gate for coding agents.",
+  "description": "Headless audio renderer and deterministic listening gate for coding agents.",
   "keywords": [
     "audio",
     "sfx",
@@ -34,7 +34,7 @@
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.audio.json && tsc -p tsconfig.test.json --noEmit",
-    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js",
+    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js tests/theory/*.test.mjs",
     "lint": "eslint . --max-warnings=0",
     "check": "tsc -p tsconfig.audio.json && npm run lint && npm test"
   },
@@ -49,5 +49,8 @@
     ".": "./dist/index.js",
     "./compose": "./dist/compose.js",
     "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "tonal": "6.10.0"
   }
 }

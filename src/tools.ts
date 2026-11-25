@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import { lintScore } from './theory/index.js';
+import { parseLintScore } from './score/theory.js';
 import { EDIT_OPS, runEdit, type Backend, type EditOp } from './score/edit.js';
 import { PROFILES, parseProfile } from './ears/profiles.js';
 import { analyseAudioFile, critiqueProject, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
@@ -247,6 +249,19 @@ export const TOOLS: readonly Tool[] = [
       if (typeof a.project === 'string') return { ok: true, data: critiqueProject(load(a)) };
       if (typeof a.wav === 'string') return { ok: true, data: analyseAudioFile(a.wav) };
       throw new ToolError('pass project or wav');
+    },
+  },
+  {
+    name: 'lint',
+    verdict: true,
+    description: 'Check score notation, instrument ranges and voice leading. Findings include a one-based bar and beat, voice, and track id.',
+    inputSchema: schema({ score: s('Path to the score JSON'), style: { type: 'string', enum: ['strict', 'free'] } }, ['score']),
+    run: (a) => {
+      const raw: unknown = JSON.parse(fs.readFileSync(reqStr(a, 'score'), 'utf8'));
+      const score = parseLintScore(raw, a.style);
+      const findings = lintScore(score);
+      const ok = findings.every(d => d.severity !== 'error');
+      return { ok, data: { ok, style: score.style, findings } };
     },
   },
   checkTool,

@@ -23,3 +23,6 @@ export { importNotes } from './score/ops.js';
 export { PROFILES, type Profile } from './ears/profiles.js';
 export type { CheckOptions } from './ears/check.js';
 export { readWav, writeWav, encodeDitheredWav, type Audio } from './io/wav.js';
+export { lintScore, INSTRUMENT_DEFS } from './theory/index.js';
+export type { Instrument, InstrumentDef, Score, Event, Track as TheoryTrack, Code, Diagnostic, Location } from './theory/index.js';
+export { parseLintScore, projectToTheoryScore } from './score/theory.js';
