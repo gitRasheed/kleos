@@ -1,0 +1,14 @@
+{
+  "format": "kleos/score/v1",
+  "id": "quickstart",
+  "kind": "cue",
+  "bars": 1,
+  "tracks": [{
+    "id": "piano", "instrument": "piano",
+    "clips": [{ "id": "theme", "notes": [
+      { "midi": 60, "startBeat": 0, "durationBeats": 1 },
+      { "midi": 64, "startBeat": 1, "durationBeats": 1 },
+      { "midi": 67, "startBeat": 2, "durationBeats": 2 }
+    ] }]
+  }]
+}

@@ -67,7 +67,9 @@ test('native engraving and subsequent edits to an imported score include the cur
   assert.equal(p.title, 'Duo');
   assert.equal(p.tempo.bpm, 81);
   assert.deepEqual(p.tracks[0].clips[0].notes.map(n => [n.midi, n.startBeat, n.durationBeats]), [[60, 3, 3], [64, 4, 1]]);
-  cli('add-notes', file, '--track-id', p.tracks[0].id, '--clip-id', 'main', '--notes', '[{"midi":67,"startBeat":7,"durationBeats":1}]');
+  const edited = JSON.parse(fs.readFileSync(file, 'utf8'));
+  edited.tracks[0].clips[0].notes.push({ midi: 67, startBeat: 7, durationBeats: 1 });
+  fs.writeFileSync(file, JSON.stringify(edited));
   cli('export-musicxml', file, '--out', xml);
   assert.deepEqual(performPart(readMusicXml(fs.readFileSync(xml, 'utf8')).parts[0]).map(n => n.midi), [60, 64, 67]);
 });

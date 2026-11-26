@@ -1,4 +1,4 @@
-import { Note } from 'tonal'
+import * as Note from '@tonaljs/note'
 import { timeline } from './timeline.js'
 import type { Harmony, Pitch, Sound } from './timeline.js'
 import type { Code, Diagnostic, Score } from './types.js'

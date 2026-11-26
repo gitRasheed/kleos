@@ -91,3 +91,14 @@ test('ffmpeg export --codec encodes the same WAV to the same bytes every time', 
   assert.throws(() => runEdit({ op: 'export', inputs: [file('codec-in.wav')], out: file('x.flac'), params: { codec: 'flac', bitrate: '96k' } }), /lossless/);
   assert.throws(() => runEdit({ op: 'export', inputs: [file('codec-in.wav')], out: file('x.aac'), params: { codec: 'aac' } }), /codec must be one of/);
 });
+
+for (const backend of ['native', 'sox', 'rubberband'] as const) {
+  test(backend + ' pitch with duration unlocked doubles the pitch and halves the length', { skip: backend !== 'native' && !hasBinary(backend) }, () => {
+    const input = file(backend + '-source.wav'), out = file(backend + '-octave.wav');
+    writeWav(input, sine(440, 1, 0.4));
+    runEdit({ op: 'pitch', backend, inputs: [input], out, params: { semitones: 12, preserveDuration: false } });
+    const shifted = readWav(out);
+    assert.equal(ch0(shifted).length, SR / 2);
+    assert.ok(Math.abs(peakHz(ch0(shifted), 750, 1000, SR / 8, SR / 4) - 880) < 4);
+  });
+}

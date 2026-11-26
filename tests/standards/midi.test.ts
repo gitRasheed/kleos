@@ -107,6 +107,17 @@ test('standalone SMF input keeps a nondefault PPQ and a control-only channel', (
   assert.deepEqual(readMidiFile(writeMidiFile(p)), p)
 })
 
+test('track names retain UTF-8 and legacy single-byte accents', () => {
+  const { played } = excerpt('mozart')
+  played.tracks[0].name = 'Flûte Ⅰ'
+  assert.equal(readMidiFile(writeMidiFile(played)).tracks[0].name, 'Flûte Ⅰ')
+  const data = wire.parseMidi(writeMidiFile(played))
+  const name = data.tracks[1].find(e => e.type === 'trackName')
+  assert.ok(name)
+  name.text = 'Flûte'
+  assert.equal(readMidiFile(Uint8Array.from(wire.writeMidi(data))).tracks[0].name, 'Flûte')
+})
+
 test('import/export preserves the original 400008 microseconds per quarter exactly', () => {
   const data = wire.writeMidi({
     header: { format: 1, numTracks: 1, ticksPerBeat: 480 },

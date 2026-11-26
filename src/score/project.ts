@@ -171,7 +171,7 @@ export type ParseResult<T> =
   | { readonly ok: true; readonly value: T; readonly warnings: readonly Issue[] }
   | { readonly ok: false; readonly errors: readonly Issue[]; readonly warnings: readonly Issue[] };
 
-export class Ctx {
+class Ctx {
   readonly errors: Issue[] = [];
   readonly warnings: Issue[] = [];
   error(path: string, message: string): void {
@@ -249,7 +249,7 @@ function arr(ctx: Ctx, o: Obj, key: string, path: string): readonly unknown[] {
   return v;
 }
 
-export function parseNote(ctx: Ctx, raw: unknown, path: string): Note | null {
+function parseNote(ctx: Ctx, raw: unknown, path: string): Note | null {
   if (!isObj(raw)) {
     ctx.error(path, 'note must be an object');
     return null;
@@ -280,7 +280,7 @@ function parseNotes(ctx: Ctx, list: readonly unknown[], path: string): Note[] {
   return out.sort((a, b) => a.startBeat - b.startBeat || a.midi - b.midi);
 }
 
-export function parseClip(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Clip | null {
+function parseClip(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Clip | null {
   if (!isObj(raw)) {
     ctx.error(path, 'clip must be an object');
     return null;
@@ -316,7 +316,7 @@ const instrumentParams: Record<InstrumentType, readonly string[]> = {
   'synth-bass': ['cutoff', 'envAmount'], 'cinematic-sfx': ['preset'], sf2: ['bank', 'program'],
 };
 
-export function parseInstrument(ctx: Ctx, raw: unknown, path: string): InstrumentConfig {
+function parseInstrument(ctx: Ctx, raw: unknown, path: string): InstrumentConfig {
   if (typeof raw === 'string') raw = { type: raw };
   if (!isObj(raw)) {
     ctx.error(path, 'instrument must be an object or a type name');
@@ -362,7 +362,7 @@ function parseBand(ctx: Ctx, raw: unknown, path: string): EqBand[] {
   return [{ type, hz, q, gainDb: num(ctx, raw, 'gainDb', path, undefined, -48, 48) }];
 }
 
-export function parseFx(ctx: Ctx, raw: unknown, path: string): FxConfig | null {
+function parseFx(ctx: Ctx, raw: unknown, path: string): FxConfig | null {
   if (!isObj(raw)) {
     ctx.error(path, 'fx must be an object');
     return null;
@@ -450,7 +450,7 @@ function readFx(ctx: Ctx, p: Obj, path: string, type: FxConfig['type']): FxConfi
   }
 }
 
-export function parseAutomation(ctx: Ctx, raw: unknown, path: string): AutomationLane | null {
+function parseAutomation(ctx: Ctx, raw: unknown, path: string): AutomationLane | null {
   if (!isObj(raw)) {
     ctx.error(path, 'automation lane must be an object');
     return null;
@@ -527,7 +527,7 @@ function parseBus(ctx: Ctx, raw: unknown, path: string): MixBus[] {
     gainDb: num(ctx, raw, 'gainDb', path, 0, -60, 12), fx }];
 }
 
-export function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Track | null {
+function parseTrack(ctx: Ctx, raw: unknown, path: string, patterns: Readonly<Record<string, Pattern>>): Track | null {
   if (!isObj(raw)) {
     ctx.error(path, 'track must be an object');
     return null;
@@ -811,88 +811,6 @@ export function initProject(o: InitOptions): ParseResult<Project> {
     sections: [],
     patterns: {},
     tracks: [],
-  });
-}
-
-type Mutation = (raw: Obj) => string | null;
-
-// Every edit goes through the JSON form and back through parseProject, so edits cannot produce an invalid project.
-function mutate(p: Project, edit: Mutation): ParseResult<Project> {
-  const raw = JSON.parse(JSON.stringify(p)) as Obj;
-  const err = edit(raw);
-  if (err !== null) return { ok: false, errors: [{ path: '$', message: err }], warnings: [] };
-  return parseProject(raw);
-}
-
-function findTrack(raw: Obj, trackId: string): Obj | null {
-  const tracks = raw.tracks as Obj[];
-  return tracks.find((t) => t.id === trackId) ?? null;
-}
-
-export function addTrack(p: Project, track: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    if (!isObj(track)) return 'track must be an object';
-    if (findTrack(raw, String(track.id)) !== null) return `track "${String(track.id)}" already exists`;
-    (raw.tracks as unknown[]).push(track);
-    return null;
-  });
-}
-
-export function removeTrack(p: Project, trackId: string): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const tracks = raw.tracks as Obj[];
-    const idx = tracks.findIndex((t) => t.id === trackId);
-    if (idx < 0) return `no track "${trackId}"`;
-    tracks.splice(idx, 1);
-    return null;
-  });
-}
-
-export function addClip(p: Project, trackId: string, clip: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const t = findTrack(raw, trackId);
-    if (t === null) return `no track "${trackId}"`;
-    (t.clips as unknown[]).push(clip);
-    return null;
-  });
-}
-
-export function addNotes(p: Project, trackId: string, clipId: string, notes: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const t = findTrack(raw, trackId);
-    if (t === null) return `no track "${trackId}"`;
-    const clip = (t.clips as Obj[]).find((c) => c.id === clipId);
-    if (clip === undefined) return `no clip "${clipId}" on track "${trackId}"`;
-    if (!Array.isArray(notes)) return 'notes must be an array';
-    (clip.notes as unknown[]).push(...(notes as unknown[]));
-    return null;
-  });
-}
-
-export function setInstrument(p: Project, trackId: string, instrument: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const t = findTrack(raw, trackId);
-    if (t === null) return `no track "${trackId}"`;
-    t.instrument = instrument;
-    return null;
-  });
-}
-
-export function addFx(p: Project, trackId: string, fx: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const t = findTrack(raw, trackId);
-    if (t === null) return `no track "${trackId}"`;
-    (t.fx as unknown[]).push(fx);
-    return null;
-  });
-}
-
-export function addAutomation(p: Project, trackId: string, lane: unknown): ParseResult<Project> {
-  return mutate(p, (raw) => {
-    const t = findTrack(raw, trackId);
-    if (t === null) return `no track "${trackId}"`;
-    (t.automation as unknown[]).push(lane);
-    return null;
   });
 }
 

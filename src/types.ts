@@ -82,11 +82,9 @@ export interface ChannelMetrics {
   readonly fullScaleSamples: number;
   readonly flatTopSamples: number;
   readonly fullScaleMaxRun: number;
-  readonly startEdgePeak: number;
   readonly endEdgePeak: number;
   readonly leadingSilenceS: number;
   readonly trailingSilenceS: number;
-  readonly maxFirstDiff: number;
   readonly clickRatio: number;
   readonly clickFrame: number;
   readonly clickTimeS: number;

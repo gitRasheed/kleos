@@ -94,22 +94,18 @@ it('detects a single click between the default limit and twice that limit', () =
   assert.ok(has(report, 'IMPULSE_CLICK'));
 });
 
-it('edits tracks and clips whose IDs look like numbers', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aa-ids-'));
+it('rejects unknown score flags, conflicting paths and unsupported edit depths', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kleos-flags-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const project = path.join(dir, 'score.json');
-  for (const args of [
-    ['init', project, '--id', '001'],
-    ['add-track', project, '--track', '{"id":"1","instrument":"piano"}'],
-    ['add-clip', project, '--track-id', '1', '--clip', '{"id":"02","startBeat":0}'],
-    ['add-notes', project, '--track-id', '1', '--clip-id', '02', '--notes', '[{"midi":67,"startBeat":0,"durationBeats":1}]'],
-  ]) {
-    const result = runCli(args);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-  }
-  const score = JSON.parse(fs.readFileSync(project, 'utf8'));
-  assert.equal(score.id, '001');
-  assert.equal(score.tracks[0].clips[0].notes[0].midi, 67);
+  const score = path.join(dir, 'score.json');
+  assert.equal(runCli(['init', score, '--id', '001']).status, 0);
+  assert.equal(runCli(['validate', score, '--typo', '1']).status, 2);
+  assert.equal(runCli(['dump', 'absent.json', '--project', score]).status, 2);
+  const out = path.join(dir, 'out.wav');
+  const edit = runCli(['edit', 'fade', '--bit-depth', '20', '--in', out, '--out', out]);
+  assert.equal(edit.status, 2);
+  assert.match(edit.stderr, /bitDepth must be 16, 24 or 32/);
+  assert.equal(fs.existsSync(out), false);
 });
 
 it('rejects unknown and misplaced fade flags before writing the output', t => {
@@ -429,7 +425,7 @@ describe('SKILL.md', () => {
   });
 
   const examples = [...skill.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => JSON.parse(m[1] ?? '') as unknown);
-  const isMix = (e: unknown): boolean => (e as { schemaVersion?: unknown }).schemaVersion === 'agent-audio/mix/v1';
+  const isMix = (e: unknown): boolean => (e as { schemaVersion?: unknown }).schemaVersion === 'kleos/mix/v1';
 
   it('has a valid mix manifest example', () => {
     const mixes = examples.filter(isMix);

@@ -211,19 +211,3 @@ function renderPerc(ev: NoteEvent, _params: Params): Stereo {
 
 export const timpani: Instrument = { render: renderTimpani };
 export const orchestralPerc: Instrument = { render: renderPerc };
-
-export const PERC_MAP: Readonly<Record<string, number>> = {
-  taiko: 36,
-  'taiko-low': 35,
-  snare: 38,
-  rimshot: 40,
-  'trailer-hit': 39,
-  'hat-closed': 42,
-  'hat-open': 46,
-  crash: 49,
-  ride: 51,
-  'cymbal-swell': 55,
-  'tom-low': 41,
-  'tom-mid': 45,
-  'tom-high': 48,
-};

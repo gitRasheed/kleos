@@ -192,14 +192,12 @@ export function truePeakEnvelope(buf: Float64Array): Float64Array {
 
 const HOPS_PER_BLOCK = 4;
 
-function blockEnergies(
-  channels: readonly Float64Array[],
-  sampleRate: number,
-  frames: number,
-): readonly number[] {
-  const hopFrames = Math.round(0.1 * sampleRate);
+function weightedHops(channels: readonly Float64Array[], sampleRate: number, frames: number, hopFrames: number) {
   const stages = kWeightingStages(sampleRate);
-  const perChannel = channels.map((ch) => hopEnergies(ch, frames, hopFrames, stages));
+  return channels.map((ch) => hopEnergies(ch, frames, hopFrames, stages));
+}
+
+function blockEnergies(perChannel: readonly Float64Array[], hopFrames: number, frames: number): readonly number[] {
   const blocks = Math.max(0, Math.floor(frames / hopFrames) - HOPS_PER_BLOCK + 1);
   const energies: number[] = [];
   for (let b = 0; b < blocks; b += 1) {
@@ -223,12 +221,14 @@ export function loudnessRange(channels: readonly Float64Array[], sampleRate: num
   const hop = Math.max(1, Math.round(sampleRate / 10));
   const padded = frames + Math.ceil(1.5 * sampleRate);
   if (padded < 30 * hop || frames === 0) return null;
-  const stages = kWeightingStages(sampleRate);
-  const energies = channels.map(channel => hopEnergies(channel, padded, hop, stages));
+  return rangeFromHops(weightedHops(channels, sampleRate, padded, hop), hop);
+}
+
+function rangeFromHops(energies: readonly Float64Array[], hop: number) {
   const absolute = 10 ** ((-70 + 0.691) / 10);
   const levels: number[] = [];
   let sum = 0;
-  for (let h = 0; h < Math.floor(padded / hop); h++) {
+  for (let h = 0; h < (energies[0]?.length ?? 0); h++) {
     for (const channel of energies) sum += (channel[h] ?? 0) - (channel[h - 30] ?? 0);
     const power = sum / (30 * hop);
     if (h >= 29 && power >= absolute) levels.push(power);
@@ -247,7 +247,12 @@ export function measureLoudness(
 ): LoudnessMetrics {
   const truePeak = measureTruePeak(channels, options);
   const frames = channels[0]?.length ?? 0;
-  const blockFrames = HOPS_PER_BLOCK * Math.round(0.1 * sampleRate);
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new RangeError('Invalid sample rate');
+  const hopFrames = Math.max(1, Math.round(0.1 * sampleRate));
+  const blockFrames = HOPS_PER_BLOCK * hopFrames;
+  const padded = frames + Math.ceil(1.5 * sampleRate);
+  const hasRange = frames > 0 && padded >= 30 * hopFrames;
+  const perChannel = weightedHops(channels, sampleRate, hasRange ? padded : Math.max(frames, blockFrames), hopFrames);
 
   let momentaryMaxLufs: number | null = null;
   let shortTermMaxLufs: number | null = null;
@@ -258,13 +263,13 @@ export function measureLoudness(
   if (frames < blockFrames) {
     momentaryPadded = true;
     integratedReason = 'duration_below_400ms';
-    const energies = blockEnergies(channels, sampleRate, blockFrames);
+    const energies = blockEnergies(perChannel, hopFrames, blockFrames);
     const e0 = energies[0] ?? 0;
     if (e0 > 0) {
       momentaryMaxLufs = -0.691 + 10 * Math.log10(e0);
     }
   } else {
-    const energies = blockEnergies(channels, sampleRate, frames);
+    const energies = blockEnergies(perChannel, hopFrames, frames);
     const blockLoudness = energies.map((e) => (e > 0 ? -0.691 + 10 * Math.log10(e) : -Infinity));
     let maxM = -Infinity;
     for (const l of blockLoudness) {
@@ -275,10 +280,8 @@ export function measureLoudness(
     momentaryMaxLufs = Number.isFinite(maxM) ? maxM : null;
 
     const hopsPerShort = 30;
-    const hopFrames = Math.round(0.1 * sampleRate);
     if (frames >= hopsPerShort * hopFrames) {
-      const perChannel = channels.map((ch) => hopEnergies(ch, frames, hopFrames, kWeightingStages(sampleRate)));
-      const hops = perChannel[0]?.length ?? 0;
+      const hops = Math.floor(frames / hopFrames);
       let maxS = -Infinity;
       for (let h = 0; h + hopsPerShort <= hops; h += 1) {
         let e = 0;
@@ -317,7 +320,7 @@ export function measureLoudness(
     squares += x * x;
   }
   return {
-    lraLu: loudnessRange(channels, sampleRate),
+    lraLu: hasRange ? rangeFromHops(perChannel, hopFrames) : null,
     plrDb: truePeak.truePeakDbtp === null || integratedLufs === null ? null : truePeak.truePeakDbtp - integratedLufs,
     crestFactorDb: squares === 0 ? null : 20 * Math.log10(peak / Math.sqrt(squares / (frames * channels.length))),
     integratedLufs: integratedLufs !== null ? Number(integratedLufs.toFixed(3)) : null,
@@ -333,7 +336,9 @@ export function measureLoudness(
 
 export function integratedLufs(channels: readonly Float64Array[], sampleRate: number): number | null {
   const frames = channels[0]?.length ?? 0;
-  const energies = blockEnergies(channels, sampleRate, Math.max(frames, HOPS_PER_BLOCK * Math.round(0.1 * sampleRate)));
+  const hop = Math.max(1, Math.round(0.1 * sampleRate));
+  const padded = Math.max(frames, HOPS_PER_BLOCK * hop);
+  const energies = blockEnergies(weightedHops(channels, sampleRate, padded, hop), hop, padded);
   const abs = energies.filter((e) => e > 0 && -0.691 + 10 * Math.log10(e) > -70);
   if (abs.length === 0) return null;
   const gate = -0.691 + 10 * Math.log10(abs.reduce((a, b) => a + b, 0) / abs.length) - 10;

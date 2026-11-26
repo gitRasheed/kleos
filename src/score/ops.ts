@@ -2,13 +2,13 @@ import { auditionHtml } from '../io/auditionHtml.js';
 import { analyzeMix } from '../ears/masking.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { critique, type Critique } from './critic.js';
 import { gateAudio } from '../ears/gate.js';
 import { checkAudio, type CheckOptions } from '../ears/check.js';
 import { writeInspectionPngs } from '../io/png.js';
 import type { CheckReport } from '../types.js';
 import { exportMidi } from './midi.js';
-import { FORMAT, parseProject, projectSummary, type Layer, type ParseResult, type Project } from './project.js';
+import { type Layer, type Project } from './project.js';
+export { projectSummary as dump } from './project.js';
 import { renderProject, tile } from './render.js';
 import { encodeDitheredWav, readWav, writeWav, type BitDepth } from '../io/wav.js';
 
@@ -100,10 +100,6 @@ export function checkFile(file: string, p: Project | null, o: CheckOptions & { p
   return { ...report, pngs: writeInspectionPngs(audio, o.pngDir, name, report.loopChecked, labels) };
 }
 
-export function critiqueProject(p: Project): Critique {
-  return critique(p);
-}
-
 export function analyseAudioFile(file: string): Record<string, unknown> {
   const audio = readWav(file);
   const report = gateAudio(audio, { category: 'music' });
@@ -130,44 +126,4 @@ export function writeMidi(p: Project, out: string): Record<string, unknown> {
   fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
   fs.writeFileSync(out, bytes);
   return { file: out, bytes: bytes.length, tracks: p.tracks.length + 1 };
-}
-
-export function dump(p: Project): Record<string, unknown> {
-  return projectSummary(p);
-}
-
-// notes/v1: the minimal agent score format (parts of {pitch|midi, start, dur, vel, art}) lifted into a project.
-export function importNotes(raw: unknown, id?: string): ParseResult<Project> {
-  if (typeof raw !== 'object' || raw === null || (raw as { format?: unknown }).format !== 'notes/v1')
-    return { ok: false, errors: [{ path: '$.format', message: 'must be "notes/v1"' }], warnings: [] };
-  const s = raw as Record<string, unknown>;
-  const parts = Array.isArray(s.parts) ? (s.parts as Record<string, unknown>[]) : [];
-  const bpb = typeof s.beatsPerBar === 'number' ? s.beatsPerBar : 4;
-  let lastBeat = 0;
-  const tracks = parts.map((part, i) => {
-    const notes = (Array.isArray(part.notes) ? (part.notes as Record<string, unknown>[]) : []).map((n) => {
-      const start = Number(n.start ?? n.startBeat);
-      const dur = Number(n.dur ?? n.durationBeats);
-      lastBeat = Math.max(lastBeat, start + dur);
-      return { midi: n.midi ?? n.pitch, startBeat: start, durationBeats: dur, velocity: n.vel ?? n.velocity ?? 96, articulation: n.art ?? n.articulation ?? 'normal' };
-    });
-    return {
-      id: typeof part.id === 'string' ? part.id : `part${i + 1}`,
-      instrument: part.instrument ?? 'piano',
-      ...(typeof part.role === 'string' ? { role: part.role } : {}),
-      clips: [{ id: 'main', startBeat: 0, notes }],
-    };
-  });
-  const key = (typeof s.key === 'object' && s.key !== null ? s.key : {}) as Record<string, unknown>;
-  return parseProject({
-    format: FORMAT,
-    id: id ?? (typeof s.id === 'string' ? s.id : 'imported'),
-    title: typeof s.title === 'string' ? s.title : 'imported',
-    kind: 'cue',
-    loop: s.loop === true,
-    tempo: { bpm: typeof s.bpm === 'number' ? s.bpm : 120, beatsPerBar: bpb },
-    key: { tonic: key.tonic ?? 'C', mode: key.mode ?? 'major' },
-    bars: typeof s.bars === 'number' ? s.bars : Math.max(1, Math.ceil(lastBeat / bpb)),
-    tracks,
-  });
 }

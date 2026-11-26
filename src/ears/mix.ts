@@ -45,7 +45,7 @@ export const MIX_THRESHOLD_KEYS = [
 ] as const satisfies readonly ThresholdKey[];
 
 export interface MixReport {
-  readonly schemaVersion: 'agent-audio/mix-check/v1';
+  readonly schemaVersion: 'kleos/mix-check/v1';
   readonly ok: boolean;
   readonly stems: readonly (MixStemSpec & { readonly frames: number })[];
   readonly format: {
@@ -84,7 +84,7 @@ export function parseMixManifest(raw: unknown, baseDir: string): MixSpec {
   }
   const obj = raw as Record<string, unknown>;
   rejectUnknown(obj, MANIFEST_KEYS, 'manifest');
-  if (obj['schemaVersion'] !== 'agent-audio/mix/v1') {
+  if (obj['schemaVersion'] !== 'kleos/mix/v1' && obj['schemaVersion'] !== 'agent-audio/mix/v1') {
     throw new MixError('INVALID_MIX', `Unsupported mix schemaVersion: ${String(obj['schemaVersion'])}`);
   }
   if (obj['durationS'] !== undefined && (!finite(obj['durationS']) || obj['durationS'] <= 0)) {
@@ -217,7 +217,7 @@ export function checkMix(stems: readonly MixStem[], composite: AudioBufferData, 
   findings.push(...loudnessFindings(loudness, thresholds));
 
   return {
-    schemaVersion: 'agent-audio/mix-check/v1',
+    schemaVersion: 'kleos/mix-check/v1',
     ok: findings.every((f) => f.severity !== 'fail'),
     stems: stems.map((s) => ({
       file: s.file,

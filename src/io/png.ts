@@ -69,20 +69,6 @@ export function encodeRgbPng(width: number, height: number, rgb: Uint8Array): Ui
   return out;
 }
 
-function monoMix(audio: Audio): Float64Array {
-  const n = audio.channels[0]?.length ?? 0;
-  const out = new Float64Array(n);
-  const chCount = audio.channels.length;
-  for (let i = 0; i < n; i += 1) {
-    let sum = 0;
-    for (let c = 0; c < chCount; c += 1) {
-      sum += audio.channels[c]?.[i] ?? 0;
-    }
-    out[i] = sum / chCount;
-  }
-  return out;
-}
-
 function encodeImage(img: Image): Uint8Array {
   return encodeRgbPng(img.width, img.height, img.rgb);
 }
@@ -95,18 +81,21 @@ export function writeInspectionPngs(
   labels?: PlotLabels,
 ): { readonly waveform: string; readonly spectrogram: string; readonly seamWrap?: string } {
   fs.mkdirSync(outDir, { recursive: true });
-  const mono = monoMix(audio);
+  const frames = audio.channels[0]?.length ?? 0;
 
   const waveformPath = path.join(outDir, `${baseName}_waveform.png`);
   const spectrogramPath = path.join(outDir, `${baseName}_spectrogram.png`);
-  fs.writeFileSync(waveformPath, encodeImage(renderWaveformImage(labels ? audio.channels : mono, audio.sampleRate, 640, 180, labels)));
-  fs.writeFileSync(spectrogramPath, encodeImage(renderSpectrogramImage(mono, audio.sampleRate, 640, 240, labels)));
+  fs.writeFileSync(waveformPath, encodeImage(renderWaveformImage(audio.channels, audio.sampleRate, 640, 180, labels)));
+  fs.writeFileSync(spectrogramPath, encodeImage(renderSpectrogramImage(audio.channels, audio.sampleRate, 640, 240, labels)));
 
-  if (includeSeamWrap && mono.length > 16) {
-    const seamFrames = Math.min(Math.floor(mono.length / 2), Math.floor(audio.sampleRate * 0.08));
-    const stitched = new Float64Array(seamFrames * 2);
-    stitched.set(mono.subarray(mono.length - seamFrames), 0);
-    stitched.set(mono.subarray(0, seamFrames), seamFrames);
+  if (includeSeamWrap && frames > 16) {
+    const seamFrames = Math.min(Math.floor(frames / 2), Math.floor(audio.sampleRate * 0.08));
+    const stitched = audio.channels.map(channel => {
+      const seam = new Float64Array(seamFrames * 2);
+      seam.set(channel.subarray(frames - seamFrames));
+      seam.set(channel.subarray(0, seamFrames), seamFrames);
+      return seam;
+    });
     const seamWrapPath = path.join(outDir, `${baseName}_seam_wrap.png`);
     fs.writeFileSync(seamWrapPath, encodeImage(renderSeamImage(stitched, audio.sampleRate)));
     return {

@@ -1,3 +1,5 @@
+import { biquadStep, type Biquad } from '../dspPrimitives.js';
+export { biquadStep, dbToGain, midiToHz, polyBlep, type Biquad } from '../dspPrimitives.js';
 export { makeRng, type Rng } from '../random.js';
 export const SAMPLE_RATE = 48000;
 
@@ -10,10 +12,8 @@ export function stereo(frames: number): Stereo {
   return { left: new Float64Array(frames), right: new Float64Array(frames) };
 }
 
-export const dbToGain = (db: number): number => Math.pow(10, db / 20);
 export const gainToDb = (g: number): number => (g > 0 ? 20 * Math.log10(g) : -Infinity);
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
-export const midiToHz = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
 
 // Equal-power pan law, pan in [-1, 1].
 export function panGains(pan: number): readonly [number, number] {
@@ -28,18 +28,6 @@ export function hashString(s: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-export interface Biquad {
-  b0: number;
-  b1: number;
-  b2: number;
-  a1: number;
-  a2: number;
-  x1: number;
-  x2: number;
-  y1: number;
-  y2: number;
 }
 
 export type BiquadKind = 'lowpass' | 'highpass' | 'bandpass' | 'peak' | 'lowshelf' | 'highshelf' | 'notch';
@@ -90,15 +78,6 @@ export function biquad(kind: BiquadKind, freq: number, q: number, gainDb = 0, sr
   return { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0, x1: 0, x2: 0, y1: 0, y2: 0 };
 }
 
-export function biquadStep(f: Biquad, x: number): number {
-  const y = f.b0 * x + f.b1 * f.x1 + f.b2 * f.x2 - f.a1 * f.y1 - f.a2 * f.y2;
-  f.x2 = f.x1;
-  f.x1 = x;
-  f.y2 = f.y1;
-  f.y1 = y;
-  return y;
-}
-
 export function biquadRun(f: Biquad, buf: Float64Array): void {
   for (let i = 0; i < buf.length; i += 1) buf[i] = biquadStep(f, buf[i]);
 }
@@ -134,18 +113,6 @@ export function svfStep(state: Svf, x: number, g: number, k: number): number {
   return v2;
 }
 
-export function polyBlep(t: number, dt: number): number {
-  if (t < dt) {
-    const x = t / dt;
-    return x + x - x * x - 1;
-  }
-  if (t > 1 - dt) {
-    const x = (t - 1) / dt;
-    return x * x + x + x + 1;
-  }
-  return 0;
-}
-
 // 2^(cents / 1200) to within 0.03 cents for |cents| <= 40.
 export function centsRatio(cents: number): number {
   const x = cents * 5.776226504666211e-4;
@@ -154,10 +121,6 @@ export function centsRatio(cents: number): number {
 
 export function onePoleCoeff(cutoff: number, sr = SAMPLE_RATE): number {
   return 1 - Math.exp((-2 * Math.PI * cutoff) / sr);
-}
-
-export function softClip(x: number): number {
-  return Math.tanh(x);
 }
 
 export function addInto(dst: Float64Array, src: Float64Array | Float32Array, offset: number, gain: number, wrap: boolean): void {
@@ -174,17 +137,12 @@ export function addInto(dst: Float64Array, src: Float64Array | Float32Array, off
   }
 }
 
-export function rms(buf: Float64Array, start = 0, end = buf.length): number {
-  let s = 0;
-  for (let i = start; i < end; i += 1) s += buf[i] * buf[i];
-  return Math.sqrt(s / Math.max(1, end - start));
-}
-
-export function peakAbs(buf: Float64Array): number {
-  let m = 0;
-  for (let i = 0; i < buf.length; i += 1) {
-    const a = Math.abs(buf[i]);
-    if (a > m) m = a;
+export function tile(buf: Stereo, times: number): Stereo {
+  const n = buf.left.length;
+  const out = stereo(n * times);
+  for (let k = 0; k < times; k += 1) {
+    out.left.set(buf.left, k * n);
+    out.right.set(buf.right, k * n);
   }
-  return m;
+  return out;
 }

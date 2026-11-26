@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { Measure, NoteEntry, Part, Pitch, Score, TieInfo } from 'musicxml-io/musicxml';
-import { Note } from 'tonal';
+import * as Note from '@tonaljs/note';
 import { INSTRUMENT_DEFS } from '../theory/instruments.js';
+import { trackSegments } from '../score/segments.js';
 import { keySignature } from '../score/midi.js';
 import { expandTrackNotes, FORMAT, NATIVE_INSTRUMENTS, parseProject, type Project, type Track } from '../score/project.js';
 import { readAbc } from './abcBridge.js';
@@ -95,44 +96,23 @@ function writtenPitch(midi: number, flats: boolean): Pitch {
 function engrave(p: Project, track: Track, id: string): Part {
   const [fifths, minor] = keySignature(p);
   const width = Math.round(p.tempo.beatsPerBar * PPQ);
-  const timeline = new Map<number, { start: number[]; stop: number[] }>();
-  function at(tick: number) {
-    let change = timeline.get(tick);
-    if (!change) { change = { start: [], stop: [] }; timeline.set(tick, change); }
-    return change;
-  }
-  const notes = expandTrackNotes(p, track).map(n => {
-    const start = Math.round(n.startBeat * PPQ);
-    return { start, end: Math.max(start + 1, Math.round((n.startBeat + n.durationBeats) * PPQ)), pitch: writtenPitch(n.midi, fifths < 0) };
-  });
-  const end = notes.reduce((last, n) => Math.max(last, n.end), width * p.bars);
-  const bars = Math.ceil(end / width);
-  const measures: Measure[] = Array.from({ length: bars }, (_, i) => {
-    at(i * width);
-    return { _id: id + 'm' + i, number: String(i + 1), entries: [] };
-  });
-  at(bars * width);
+  const { bars, segments } = trackSegments(p, track, width, true);
+  const measures: Measure[] = Array.from({ length: bars }, (_, i) => ({
+    _id: id + 'm' + i, number: String(i + 1), entries: [],
+  }));
   measures[0].attributes = { divisions: PPQ, key: { fifths, mode: minor ? 'minor' : 'major' }, time: meterFor(p.tempo) };
   measures[0].entries.push({ _id: id + 'tempo', type: 'direction',
     directionTypes: [{ kind: 'metronome', beatUnit: 'quarter', perMinute: p.tempo.bpm }], sound: { tempo: p.tempo.bpm } });
-  notes.forEach((n, i) => { at(n.start).start.push(i); at(n.end).stop.push(i); });
-  const active = new Set<number>();
-  const ticks = [...timeline.keys()].sort((a, b) => a - b);
-  for (let i = 0; i + 1 < ticks.length; i++) {
-    const tick = ticks[i], next = ticks[i + 1];
-    const change = at(tick);
-    change.stop.forEach(n => active.delete(n));
-    change.start.forEach(n => active.add(n));
-    const entries = measures[Math.floor(tick / width)].entries;
+  for (const { tick, next, active, bar } of segments) {
+    const entries = measures[bar].entries;
     const entry: NoteEntry = { _id: id + 't' + tick, type: 'note', duration: next - tick, voice: '1' };
     if (!active.size) entries.push({ ...entry, rest: {} });
     let chord = false;
-    for (const n of active) {
-      const note = notes[n];
+    for (const note of active) {
       const ties: TieInfo[] = [];
       if (note.start < tick) ties.push({ type: 'stop' });
       if (next < note.end) ties.push({ type: 'start' });
-      entries.push({ ...entry, _id: entry._id + 'n' + n, pitch: note.pitch, chord, ties,
+      entries.push({ ...entry, _id: entry._id + 'n' + note.index, pitch: writtenPitch(note.midi, fifths < 0), chord, ties,
         notations: ties.map(t => ({ type: 'tied', tiedType: t.type })) });
       chord = true;
     }

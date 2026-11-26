@@ -23,7 +23,7 @@ Run `kleos skill install` for your account or `kleos skill install --project` in
 ## Render and check a sound
 
 ```sh
-kleos render recipes/cannon-shot.recipe.json --out out/shot.wav
+kleos render "$(npm root -g)/kleos/recipes/cannon-shot.recipe.json" --out out/shot.wav
 kleos check out/shot.wav --summary
 ```
 
@@ -48,17 +48,17 @@ Exit 0 means the command succeeded. Exit 1 reports a failed verdict, including a
 
 A `kleos/score/v1` project contains tempo, key, tracks and a master configuration. Projects marked `agent-daw/v1` or `agent-audio/score/v1` also load. Each track has an instrument, clips of notes, optional automation and ordered inserts. Scores render at 48 kHz. Thirteen modeled instruments cover piano, brass, strings, guitars, percussion, synths and cinematic effects. The `sf2` instrument reads an uncompressed PCM SoundFont. For example, `{"type":"sf2","params":{"bank":"piano.sf2","program":0}}` selects program 0 in melodic bank 0. Bank paths resolve relative to the project.
 
-Start from a bundled score, create an empty one with `init`, or import a tune:
+After the global install, start in an empty directory and copy the bundled score:
 
 ```sh
-kleos import-abc theme.abc --out cue.json
+cp "$(npm root -g)/kleos/examples/quickstart.daw.json" cue.json
 kleos validate cue.json
 kleos lint cue.json --style free
 kleos render cue.json --out out/cue.wav --stems-dir out/stems
 kleos check out/cue.wav --project cue.json --summary
 ```
 
-`validate` reports structural errors by JSON path. `lint` checks notation, register and voice leading, with one-based bar and beat locations. Use `strict` for four-part writing or `free` for orchestral textures. `critique` scores motif recall, harmonic flow, rhythm, register and dynamics. Its score becomes a gate when you pass `--min`.
+`validate` reports structural errors by JSON path. `lint` checks notation, register and voice leading, with one-based bar and beat locations. Use `strict` for four-part writing or `free` for orchestral textures.
 
 ## Mix tracks and buses
 
@@ -91,7 +91,7 @@ kleos masking cue.json
 kleos audition cue.json --out out/audition
 ```
 
-`masking` checks 24 Bark bands in 50 ms windows. A `MASKED` finding identifies the lead, contributing maskers, frequency band, time in seconds and zero-based project bar. The threshold is a lead-to-masker power ratio of −10 dB or lower in a band carrying at least 10% of the lead’s power. Routed tracks are measured through their buses in isolation. The full master supplies the spectral balance and mono checks. `LOW_MID_BUILDUP`, `HARSH_BAND`, `SUB_RUMBLE` and `MONO_LOSS` are listening cues. The masking command reports them without failing the WAV gate.
+`masking` checks 24 Bark bands in 50 ms windows. A `MASKED` finding identifies the lead, contributing maskers, frequency band, time in seconds and zero-based project bar. Kleos checks each channel separately. It flags a band when it carries at least 10% of the lead’s power and the combined maskers exceed the lead by at least 10 dB. Routed tracks are measured through their buses in isolation. `MONO_LOSS` flags a drop of more than 6 dB when the stereo master is summed to mono.
 
 Open `out/audition/index.html` directly in a browser. The page embeds the WAVs and schedules their playback together. It plays the inputs to the master before final mastering. Routed projects expose the groups, returns or tracks feeding that bus. Click a finding to seek, or use mute, solo and gain to compare stems. “Copy Mix JSON” exports trims relative to the embedded stems.
 

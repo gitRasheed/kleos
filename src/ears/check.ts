@@ -180,20 +180,12 @@ function detectImpulseClick(
   sampleRate: number,
   level: number,
 ): {
-  readonly maxFirstDiff: number;
   readonly clickRatio: number;
   readonly clickFrame: number;
 } {
   const n = buf.length;
-  let maxFirstDiff = 0;
-  for (let i = 0; i < n - 1; i += 1) {
-    const d = Math.abs((buf[i + 1] ?? 0) - (buf[i] ?? 0));
-    if (d > maxFirstDiff) {
-      maxFirstDiff = d;
-    }
-  }
   if (n < 16 || level < MIN_JUDGED_LEVEL) {
-    return { maxFirstDiff, clickRatio: 0, clickFrame: 0 };
+    return { clickRatio: 0, clickFrame: 0 };
   }
 
   const curvatureAt = (i: number): number =>
@@ -266,7 +258,7 @@ function detectImpulseClick(
     }
   }
 
-  return { maxFirstDiff, clickRatio: bestRatio, clickFrame: bestFrame };
+  return { clickRatio: bestRatio, clickFrame: bestFrame };
 }
 
 function analyzeChannel(
@@ -306,13 +298,6 @@ function analyzeChannel(
 
   // Measure edges over 0.5 ms so clean >= 2 ms fades to zero are not misclassified as cut tails.
   const edgeFrames = Math.max(1, Math.floor(sampleRate * 0.0005));
-  let startEdgePeak = 0;
-  for (let i = 0; i < Math.min(n, edgeFrames); i += 1) {
-    const abs = Math.abs(buf[i] ?? 0);
-    if (abs > startEdgePeak) {
-      startEdgePeak = abs;
-    }
-  }
   let endEdgePeak = 0;
   for (let i = Math.max(0, n - edgeFrames); i < n; i += 1) {
     const abs = Math.abs(buf[i] ?? 0);
@@ -351,11 +336,9 @@ function analyzeChannel(
     fullScaleSamples,
     fullScaleMaxRun,
     flatTopSamples: detectFlatTopClipping([buf], sampleRate).reduce((sum, hit) => sum + hit.flatSamples, 0),
-    startEdgePeak: roundNum(startEdgePeak, 5),
     endEdgePeak: roundNum(endEdgePeak, 5),
     leadingSilenceS: roundNum(leadingSilenceS, 4),
     trailingSilenceS: roundNum(trailingSilenceS, 4),
-    maxFirstDiff: roundNum(click.maxFirstDiff, 5),
     clickRatio: roundNum(click.clickRatio, 3),
     clickFrame: click.clickFrame,
     clickTimeS: roundNum(click.clickFrame / sampleRate, 4),

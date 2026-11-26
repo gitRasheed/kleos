@@ -8,6 +8,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   checkAudio,
+  writeInspectionPngs,
   decodeWav,
   encodeWav,
   measureTruePeak,
@@ -593,4 +594,18 @@ describe('labelled inspection PNGs', () => {
     assert.deepEqual(pixelAt(img, x, MARGIN.top - 3), COLORS.wrap);
     assert.deepEqual(pixelAt(img, x + 1, MARGIN.top + 40), COLORS.wave);
   });
+});
+
+it('inspection PNGs show an audible inverted stereo signal in all three plots', () => {
+  const left = Float64Array.from({ length: 4800 }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 440 * i / SR));
+  const zero = new Float64Array(left.length);
+  const plots = (name: string, channels: Float64Array[]) =>
+    writeInspectionPngs({ sampleRate: SR, channels }, TMP, name, true);
+  const audible = plots('inverted', [left, left.map(x => -x)]);
+  const silent = plots('silent', [zero, zero]);
+  for (const key of ['waveform', 'spectrogram', 'seamWrap'] as const) {
+    const a = audible[key], b = silent[key];
+    assert.ok(a && b);
+    assert.notDeepEqual(fs.readFileSync(a), fs.readFileSync(b), key);
+  }
 });

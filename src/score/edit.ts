@@ -262,6 +262,7 @@ function withTemp<T>(f: (dir: string) => T): T {
 
 export function runEdit(req: EditRequest): EditResult {
   const p = req.params ?? {};
+  const preserveDuration = p.preserveDuration !== false && p.preserveDuration !== 'false';
   const codec = p.codec;
   if (codec !== undefined && !(CODECS as readonly unknown[]).includes(codec)) throw new Error(`codec must be one of ${CODECS.join(', ')}`);
   if (codec !== undefined && req.op !== 'export') throw new Error('codec only applies to export');
@@ -280,12 +281,15 @@ export function runEdit(req: EditRequest): EditResult {
   if (backend !== 'native' && (req.op === 'pitch' || req.op === 'stretch' || req.op === 'export')) {
     return withTemp((dir) => {
       const outTmp = req.op === 'export' ? req.out : path.join(dir, 'out.wav');
+      const semitones = req.op === 'pitch' ? numParam(p, 'semitones') : 0;
+      const speed = 2 ** (semitones / 12);
       if (backend === 'rubberband') {
-        const args = req.op === 'pitch' ? ['-q', '-p', String(numParam(p, 'semitones')), input, outTmp] : ['-q', '-t', String(numParam(p, 'ratio')), input, outTmp];
+        const args = req.op === 'pitch' ? ['-p', String(semitones), ...(preserveDuration ? [] : ['-t', String(1 / speed)])] : ['-t', String(numParam(p, 'ratio'))];
         if (req.op === 'export') throw new Error('rubberband cannot export; use ffmpeg or sox');
-        run('rubberband', args);
+        run('rubberband', ['-q', ...args, input, outTmp]);
       } else if (backend === 'sox') {
-        const effect = req.op === 'pitch' ? ['pitch', String(numParam(p, 'semitones') * 100)] : req.op === 'stretch' ? ['tempo', '-m', String(1 / numParam(p, 'ratio'))] : [];
+        const pitch = preserveDuration ? ['pitch', String(semitones * 100)] : ['speed', String(speed)];
+        const effect = req.op === 'pitch' ? pitch : req.op === 'stretch' ? ['tempo', '-m', String(1 / numParam(p, 'ratio'))] : [];
         run('sox', [input, ...(req.op === 'export' ? ['-b', String(bitDepth)] : []), outTmp, ...effect]);
       } else {
         if (req.op !== 'export') throw new Error('the ffmpeg backend only exports; use rubberband or sox for pitch and stretch');
@@ -315,7 +319,7 @@ export function runEdit(req: EditRequest): EditResult {
       return finish(r.audio);
     }
     case 'pitch':
-      return finish(pitchShift(a, numParam(p, 'semitones'), p.preserveDuration !== false && p.preserveDuration !== 'false'));
+      return finish(pitchShift(a, numParam(p, 'semitones'), preserveDuration));
     case 'stretch':
       return finish(stretch(a, numParam(p, 'ratio')));
     case 'layer': {

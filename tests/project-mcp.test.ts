@@ -5,9 +5,8 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { importNotes } from '../src/score/ops.js';
-import { addNotes, addTrack, expandTrackNotes, initProject, parseProject } from '../src/score/project.js';
-import { tmpDir } from './helpers.js';
+import { expandTrackNotes, initProject, parseProject } from '../src/score/project.js';
+import { tmpDir, track } from './helpers.js';
 
 const cli = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../dist/cli.js');
 
@@ -29,25 +28,13 @@ test('a tempo with a fractional loop length warns; 120 BPM does not', () => {
   assert.equal(at(110), 1);
 });
 
-test('patterns expand with repeat and transpose; mutations re-validate', () => {
+test('patterns expand with repeat and transpose', () => {
   const r = parseProject({ format: 'agent-daw/v1', id: 'x', bars: 4, patterns: { riff: { lengthBeats: 2, notes: [{ midi: 50, startBeat: 0, durationBeats: 1 }, { midi: 53, startBeat: 1, durationBeats: 1 }] } }, tracks: [{ id: 'g', instrument: 'guitar-electric', clips: [{ id: 'c', startBeat: 4, pattern: 'riff', repeat: 3, transpose: 2 }] }] });
   assert.ok(r.ok);
   if (!r.ok) return;
   const t = r.value.tracks[0];
   assert.ok(t !== undefined);
   assert.deepEqual(expandTrackNotes(r.value, t).map((n) => [n.midi, n.startBeat]), [[52, 4], [55, 5], [52, 6], [55, 7], [52, 8], [55, 9]]);
-  const bad = addNotes(r.value, 'g', 'c', [{ midi: 60, startBeat: 0, durationBeats: 0 }]);
-  assert.equal(bad.ok, false);
-  const dup = addTrack(r.value, { id: 'g', instrument: 'piano' });
-  assert.equal(dup.ok, false);
-});
-
-test('notes/v1 scores import with pitch as an alias for midi', () => {
-  const r = importNotes({ format: 'notes/v1', bpm: 120, key: { tonic: 'D', mode: 'dorian' }, parts: [{ id: 'lead', instrument: 'brass-horn', notes: [{ pitch: 62, start: 0, dur: 1, vel: 100 }, { pitch: 69, start: 1, dur: 3 }] }] });
-  assert.ok(r.ok, JSON.stringify(!r.ok ? r.errors : []));
-  if (!r.ok) return;
-  assert.equal(r.value.bars, 1);
-  assert.equal(r.value.tracks[0]?.clips[0]?.notes[1]?.midi, 69);
 });
 
 class McpClient {
@@ -115,40 +102,31 @@ async function roundTrip(c: McpClient, dir: string, proj: string): Promise<void>
   c.notify('notifications/initialized');
   const list = await c.request('tools/list');
   const names = (list.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['add_automation', 'add_clip', 'add_fx', 'add_notes', 'add_track', 'analyse', 'audition', 'masking', 'check', 'edit', 'export_midi', 'export_abc', 'export_musicxml', 'import_abc', 'import_midi', 'gate', 'lint', 'project_dump', 'project_init', 'project_validate', 'remove_track', 'render', 'set_instrument'].sort());
+  assert.deepEqual(names, ['analyse', 'audition', 'masking', 'check', 'edit', 'export_midi', 'export_abc', 'export_musicxml', 'import_abc', 'import_midi', 'lint', 'project_dump', 'project_init', 'project_validate', 'render'].sort());
 
   assert.equal((await c.call('project_init', { project: proj, id: 'cue', bars: 2, bpm: 120, tonic: 'D', mode: 'minor' })).isError, false);
-  assert.equal((await c.call('add_track', { project: proj, track: { id: 'horn', instrument: 'brass-horn', role: 'lead' } })).isError, false);
-  assert.equal((await c.call('add_track', { project: proj, track: { id: 'bass', instrument: 'strings-bass' } })).isError, false);
-  await c.call('add_clip', { project: proj, trackId: 'horn', clip: { id: 'a', startBeat: 0 } });
-  await c.call('add_clip', { project: proj, trackId: 'bass', clip: { id: 'a', startBeat: 0 } });
-  await c.call('add_notes', { project: proj, trackId: 'horn', clipId: 'a', notes: [{ midi: 62, startBeat: 0, durationBeats: 1, velocity: 100, articulation: 'accent' }, { midi: 69, startBeat: 1, durationBeats: 3, velocity: 105 }, { midi: 67, startBeat: 4, durationBeats: 2, velocity: 96 }, { midi: 65, startBeat: 6, durationBeats: 2, velocity: 90 }] });
-  await c.call('add_notes', { project: proj, trackId: 'bass', clipId: 'a', notes: [{ midi: 38, startBeat: 0, durationBeats: 4, velocity: 100 }, { midi: 45, startBeat: 4, durationBeats: 4, velocity: 100 }] });
-  await c.call('set_instrument', { project: proj, trackId: 'horn', instrument: { type: 'brass-horn', params: { players: 4 } } });
-  await c.call('add_fx', { project: proj, trackId: 'horn', fx: { type: 'reverb', preset: 'hall', mix: 0.3 } });
-  await c.call('add_automation', { project: proj, trackId: 'horn', automation: { param: 'volume', points: [{ beat: 0, value: 0 }, { beat: 4, value: -3 }, { beat: 8, value: 0 }] } });
+  const score = JSON.parse(fs.readFileSync(proj, 'utf8'));
+  score.tracks = [track('horn', 'brass-horn', [
+    { midi: 62, startBeat: 0, durationBeats: 4 }, { midi: 69, startBeat: 4, durationBeats: 4 },
+  ])];
+  fs.writeFileSync(proj, JSON.stringify(score));
   assert.equal((await c.call('project_validate', { project: proj })).isError, false);
-  const badFx = await c.call('add_fx', { project: proj, trackId: 'horn', fx: { type: 'flanger' } });
-  assert.equal(badFx.isError, true);
 
   const dumped = (await c.call('project_dump', { project: proj })).data as { tracks: { notes: number }[] };
-  assert.deepEqual(dumped.tracks.map((t) => t.notes), [4, 2]);
+  assert.deepEqual(dumped.tracks.map((t) => t.notes), [2]);
 
   const wav = path.join(dir, 'cue.wav');
   const rendered = await c.call('render', { project: proj, out: wav, bitDepth: 24 });
   assert.equal(rendered.isError, false);
   assert.ok(fs.existsSync(wav));
-  const gate = await c.call('gate', { wav, project: proj, category: 'music' });
+  const gate = await c.call('check', { wav, project: proj, category: 'music' });
   assert.equal(typeof (gate.data as { ok?: unknown }).ok, 'boolean');
-  const critic = (await c.call('analyse', { project: proj })).data as { score: number };
-  assert.ok(critic.score > 0 && critic.score <= 1);
   const audio = (await c.call('analyse', { wav })).data as { loudness: { integratedLufs: number } };
   assert.ok(Math.abs(audio.loudness.integratedLufs + 16) < 0.5);
   await c.call('edit', { op: 'normalize', inputs: [wav], out: path.join(dir, 'n.wav'), params: { lufs: -18 } });
   assert.ok(fs.existsSync(path.join(dir, 'n.wav')));
   await c.call('export_midi', { project: proj, out: path.join(dir, 'cue.mid') });
   assert.ok(fs.readFileSync(path.join(dir, 'cue.mid')).subarray(0, 4).toString() === 'MThd');
-  assert.equal((await c.call('remove_track', { project: proj, trackId: 'bass' })).isError, false);
 
   const unknown = await c.request('nope/method');
   assert.equal((unknown.error as { code: number }).code, -32601);

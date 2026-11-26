@@ -13,13 +13,11 @@ export { renderProject, renderTrack, tile, type RenderResult, type RenderOptions
 export { masterBus, limit, wrapPad, type MasterStats } from './score/master.js';
 export { applyFx } from './score/fx.js';
 export { INSTRUMENT_MODELS } from './score/instruments/index.js';
-export { critique, CRITIC_WEIGHTS, type Critique } from './score/critic.js';
 export { gateAudio, CATEGORIES, type GateReport, type GateOptions, type Category } from './ears/gate.js';
 export { exportMidi, parseMidi } from './score/midi.js';
 export { runEdit, normalize, pitchShift, stretch, trimSilence, fade, layer, EDIT_OPS } from './score/edit.js';
 export { TOOLS } from './tools.js';
 export { handleMessage } from './mcp.js';
-export { importNotes } from './score/ops.js';
 export { PROFILES, type Profile } from './ears/profiles.js';
 export type { CheckOptions } from './ears/check.js';
 export { readWav, writeWav, encodeDitheredWav, type Audio } from './io/wav.js';
@@ -28,7 +26,7 @@ export type { Instrument, InstrumentDef, Score, Event, Track as TheoryTrack, Cod
 export { parseLintScore, projectToTheoryScore } from './score/theory.js';
 export * from './notation/conductor.js';
 export * from './notation/abcBridge.js';
-export * from './notation/midiBridge.js';
+export { readMidiFile, writeMidiFile } from './notation/midiBridge.js';
 export { readMusicXml, writeMusicXml, type Score as NotationScore } from './notation/musicxmlBridge.js';
 export { renderSf2 } from './notation/sf2Adapter.js';
 export { analyzeMix, type SpectralFinding, type AnalysisTrack } from './ears/masking.js';

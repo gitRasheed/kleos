@@ -33,16 +33,16 @@
     "LICENSE",
     "AGENTS.md",
     "STATE_MACHINES.md",
-    "examples"
+    "examples/quickstart.daw.json"
   ],
   "engines": {
     "node": ">=20.12.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', {recursive:true, force:true})\" && tsc -p tsconfig.json",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.audio.json && tsc -p tsconfig.test.json --noEmit",
-    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js dist-test/tests/standards/*.test.js tests/theory/*.test.mjs tests/studio/*.test.mjs",
+    "test": "npm run build && node -e \"require('node:fs').rmSync('dist-test', {recursive:true, force:true})\" && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js dist-test/tests/standards/*.test.js tests/theory/*.test.mjs tests/studio/*.test.mjs",
     "lint": "eslint . --max-warnings=0",
     "check": "tsc -p tsconfig.audio.json && npm run lint && npm test"
   },
@@ -51,7 +51,8 @@
     "@types/node": "^26.6.6",
     "eslint": "^9.39.5",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.74.0"
+    "typescript-eslint": "^8.74.0",
+    "@tonejs/midi": "2.0.28"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -59,11 +60,14 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@tonejs/midi": "2.0.28",
     "midi-file": "1.2.4",
     "musicxml-io": "0.14.0",
     "spessasynth_core": "4.4.12",
-    "tonal": "6.10.0"
+    "@tonaljs/note": "4.12.7",
+    "@tonaljs/chord": "6.5.0",
+    "@tonaljs/key": "4.11.8",
+    "@tonaljs/interval": "5.2.0",
+    "@tonaljs/scale": "4.15.1"
   },
   "repository": "https://github.com/gitRasheed/kleos.git"
 }

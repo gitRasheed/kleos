@@ -4,22 +4,14 @@ import { lintScore } from './theory/index.js';
 import { parseLintScore } from './score/theory.js';
 import { EDIT_OPS, runEdit, type Backend, type EditOp } from './score/edit.js';
 import { PROFILES, parseProfile } from './ears/profiles.js';
-import { analyseAudioFile, inspectMix, critiqueProject, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
+import { analyseAudioFile, inspectMix, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
 import {
-  INSTRUMENTS,
   KINDS,
   LAYERS,
   MODES,
-  addAutomation,
-  addClip,
-  addFx,
-  addNotes,
-  addTrack,
   initProject,
   loadProjectFile,
-  removeTrack,
   saveProjectFile,
-  setInstrument,
   type Layer,
   type ParseResult,
   type Project,
@@ -86,6 +78,12 @@ function load(a: Args): Project {
   return readProject(file);
 }
 
+function bitDepth(args: Args) {
+  const depth = optNum(args, 'bitDepth');
+  if (depth !== undefined && depth !== 16 && depth !== 24 && depth !== 32) throw new ToolError('bitDepth must be 16, 24 or 32');
+  return depth;
+}
+
 export function readProject(file: string): Project {
   const r = loadProjectFile(file);
   if (!r.ok) throw new ToolError(`project ${file} is invalid:\n${r.errors.map((e) => `  ${e.path}: ${e.message}`).join('\n')}`);
@@ -99,7 +97,6 @@ function commit(a: Args, r: ParseResult<Project>): ToolResult {
 }
 
 const projectArg = { project: s('Path to the kleos/score/v1 project JSON file') };
-const trackArg = { ...projectArg, trackId: s('Track id') };
 
 const checkTool: Tool = {
   name: 'check',
@@ -162,55 +159,12 @@ export const TOOLS: readonly Tool[] = [
     },
   },
   {
-    name: 'add_track',
-    description: `Add a track: {id, instrument: {type, params}, role, layer, gainDb, pan, fx, automation, clips}. Instruments: ${INSTRUMENTS.join(', ')}. Layers: ${LAYERS.join(', ')}.`,
-    inputSchema: schema({ ...projectArg, track: o('Track object') }, ['project', 'track']),
-    run: (a) => commit(a, addTrack(load(a), a.track)),
-  },
-  {
-    name: 'remove_track',
-    description: 'Remove a track by id.',
-    inputSchema: schema(trackArg, ['project', 'trackId']),
-    run: (a) => commit(a, removeTrack(load(a), reqStr(a, 'trackId'))),
-  },
-  {
-    name: 'add_clip',
-    description: 'Add a clip to a track: {id, startBeat, notes?, pattern?, repeat?, transpose?, velocityScale?}.',
-    inputSchema: schema({ ...trackArg, clip: o('Clip object') }, ['project', 'trackId', 'clip']),
-    run: (a) => commit(a, addClip(load(a), reqStr(a, 'trackId'), a.clip)),
-  },
-  {
-    name: 'add_notes',
-    description: 'Append notes to a clip. Note: {midi, startBeat (clip-relative), durationBeats, velocity 1-127, articulation normal|legato|staccato|accent|sforzando, pan?, pitchBend? (semitones)}.',
-    inputSchema: schema({ ...trackArg, clipId: s('Clip id'), notes: { type: 'array', items: { type: 'object' } } }, ['project', 'trackId', 'clipId', 'notes']),
-    run: (a) => commit(a, addNotes(load(a), reqStr(a, 'trackId'), reqStr(a, 'clipId'), a.notes)),
-  },
-  {
-    name: 'set_instrument',
-    description: 'Replace a track instrument: {type, params}. Brass and strings params: players, brightness (default 0; 1 opens the top). Electric guitar params: drive, double, palmMute. SFX params: preset doppler|bell-impact|glass|shield-shatter|chime|riser|sub-drop.',
-    inputSchema: schema({ ...trackArg, instrument: o('Instrument object or type name') }, ['project', 'trackId', 'instrument']),
-    run: (a) => commit(a, setInstrument(load(a), reqStr(a, 'trackId'), a.instrument)),
-  },
-  {
-    name: 'add_fx',
-    description: 'Append an insert effect to a track: eq (up to eight bands), eq3, chorus, delay (tempo-synced timeBeats), reverb (hall|plate|room), overdrive, cab, compressor.',
-    inputSchema: schema({ ...trackArg, fx: o('Effect object with type and parameters') }, ['project', 'trackId', 'fx']),
-    run: (a) => commit(a, addFx(load(a), reqStr(a, 'trackId'), a.fx)),
-  },
-  {
-    name: 'add_automation',
-    description: 'Add an automation lane: {param: volume (dB) | cutoff (Hz), points: [{beat, value}]}. In loops, end on the start value.',
-    inputSchema: schema({ ...trackArg, automation: o('Automation lane') }, ['project', 'trackId', 'automation']),
-    run: (a) => commit(a, addAutomation(load(a), reqStr(a, 'trackId'), a.automation)),
-  },
-  {
     name: 'render',
     description: 'Render the project to a 48 kHz stereo WAV through the loop-safe master bus. Reports per-track peak, LUFS and RMS before the master, plus trackBalance warnings for tracks over 16 LU under the loudest. Optional per-layer stems, a track subset (tracks or its alias solo), and an N-times looped file written beside out as <name>_xN.wav.',
     inputSchema: schema({ ...projectArg, out: s('Output WAV path'), bitDepth: { type: 'number', enum: [16, 24, 32] }, stemsDir: s('Directory for per-layer stems'), repeats: n('Loops only: also write <out name>_xN.wav, the loop tiled N times; out keeps the single pass'), layers: { type: 'array', items: { type: 'string', enum: LAYERS } }, tracks: { type: 'array', items: { type: 'string' }, description: 'Render only these track ids, muted or not; the master still normalises to the target LUFS' }, solo: { type: 'array', items: { type: 'string' }, description: 'Alias of tracks' } }, ['project', 'out']),
     run: (a) => {
       const p = load(a);
-      const bd = optNum(a, 'bitDepth');
-      if (bd !== undefined && bd !== 16 && bd !== 24 && bd !== 32) throw new ToolError('bitDepth must be 16, 24 or 32');
+      const bd = bitDepth(a);
       const layers = Array.isArray(a.layers) ? (a.layers as unknown[]).map(String) : undefined;
       if (layers?.some((l) => !(LAYERS as readonly string[]).includes(l))) throw new ToolError(`layers must be among ${LAYERS.join(', ')}`);
       const picked = [a.tracks, a.solo].filter((v) => v !== undefined);
@@ -221,7 +175,7 @@ export const TOOLS: readonly Tool[] = [
         data: renderToFiles(p, {
           projectDir: path.dirname(reqStr(a, 'project')),
           out: reqStr(a, 'out'),
-          ...defined({ bitDepth: bd as 16 | 24 | 32 | undefined, stemsDir: optStr(a, 'stemsDir'), repeats: optNum(a, 'repeats'), layers: layers as Layer[] | undefined, trackIds }),
+          ...defined({ bitDepth: bd, stemsDir: optStr(a, 'stemsDir'), repeats: optNum(a, 'repeats'), layers: layers as Layer[] | undefined, trackIds }),
         }),
       };
     },
@@ -234,7 +188,7 @@ export const TOOLS: readonly Tool[] = [
       const op = reqStr(a, 'op');
       if (!(EDIT_OPS as readonly string[]).includes(op)) throw new ToolError(`op must be one of ${EDIT_OPS.join(', ')}`);
       const inputs = Array.isArray(a.inputs) ? (a.inputs as unknown[]).map(String) : [];
-      const bd = optNum(a, 'bitDepth');
+      const bd = bitDepth(a);
       return {
         ok: true,
         data: runEdit({
@@ -242,7 +196,7 @@ export const TOOLS: readonly Tool[] = [
           inputs,
           out: reqStr(a, 'out'),
           ...(optStr(a, 'backend') !== undefined ? { backend: optStr(a, 'backend') as Backend } : {}),
-          ...(bd === 16 || bd === 24 || bd === 32 ? { bitDepth: bd } : {}),
+          ...defined({ bitDepth: bd }),
           ...(typeof a.params === 'object' && a.params !== null ? { params: a.params as Record<string, unknown> } : {}),
         }),
       };
@@ -250,13 +204,9 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'analyse',
-    description: 'With project: the symbolic music critic (0..1 score, subscores, actionable advice). With wav: loudness, spectrum, stereo and defect metrics without pass/fail.',
-    inputSchema: schema({ project: s('Project path (symbolic critique)'), wav: s('WAV path (audio analysis)') }, []),
-    run: (a) => {
-      if (typeof a.project === 'string') return { ok: true, data: critiqueProject(load(a)) };
-      if (typeof a.wav === 'string') return { ok: true, data: analyseAudioFile(a.wav) };
-      throw new ToolError('pass project or wav');
-    },
+    description: 'Measure WAV loudness, spectrum and stereo balance.',
+    inputSchema: schema({ wav: s('WAV path') }, ['wav']),
+    run: a => ({ ok: true, data: analyseAudioFile(reqStr(a, 'wav')) }),
   },
   {
     name: 'lint',
@@ -273,7 +223,7 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'masking',
-    description: 'Locate lead masking, tonal buildup and mono loss in the rendered project.',
+    description: 'Locate lead masking and mono loss in the rendered project.',
     inputSchema: schema(projectArg, ['project']),
     run: a => ({ ok: true, data: inspectMix(load(a), path.dirname(reqStr(a, 'project'))) }),
   },
@@ -284,7 +234,6 @@ export const TOOLS: readonly Tool[] = [
     run: a => ({ ok: true, data: inspectMix(load(a), path.dirname(reqStr(a, 'project')), reqStr(a, 'out')) }),
   },
   checkTool,
-  { ...checkTool, name: 'gate' },
   {
     name: 'import_abc',
     description: 'Import one ABC tune into a DAW project, retaining its written notation.',

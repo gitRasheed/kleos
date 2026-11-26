@@ -1,4 +1,4 @@
-import { dbToGain, gainToDb, stereo, SAMPLE_RATE, type Stereo } from './dsp.js';
+import { dbToGain, gainToDb, stereo, tile, SAMPLE_RATE, type Stereo } from './dsp.js';
 import { applyFx, compressWithMeter, type FxContext } from './fx.js';
 import { crop, limit } from './master.js';
 import type { FxConfig } from './project.js';
@@ -139,17 +139,9 @@ export function renderMixGraph(tracks: readonly MixTrack[], buses: readonly MixB
     }
     const track = audio.get(strip.id);
     const source = bus ?? get(audio, strip.id);
-    let input = bus ?? { left: source.left.slice(), right: source.right.slice() };
+    const input = bus ?? { left: source.left.slice(), right: source.right.slice() };
     const warm = ctx.loopFrames === frames && Boolean(strip.fx?.length);
-    if (warm) {
-      const twice = stereo(frames * 2);
-      for (const channel of ['left', 'right'] as const) {
-        twice[channel].set(input[channel]);
-        twice[channel].set(input[channel], frames);
-      }
-      input = twice;
-    }
-    const processed = inserts(input, strip, ctx, reductions, findings);
+    const processed = inserts(warm ? tile(input, 2) : input, strip, ctx, reductions, findings);
     const buf = warm ? crop(processed, frames, frames) : processed;
     const routes = get(edges, strip.id).filter(r => !solos.length ||
       (ancestors.has(strip.id) && ancestors.has(r.to)) || (descendants.has(strip.id) && descendants.has(r.to)));

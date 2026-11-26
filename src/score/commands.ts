@@ -1,22 +1,11 @@
-import fs from 'node:fs';
 import type { EditOp } from './edit.js';
-import { critiqueProject, importNotes } from './ops.js';
-import { saveProjectFile } from './project.js';
-import { ToolError, findTool, readProject } from '../tools.js';
+import { ToolError, findTool } from '../tools.js';
 
 export const SCORE_USAGE = `Project
   init <project.json> --id <id> [--bpm 120 --bars 16 --tonic D --mode minor --kind loop --target-lufs -16]
   validate <project.json>
   lint <score.json> [--style strict|free]
   dump <project.json> [--full]
-  add-track <project.json> --track '<json>'
-  remove-track <project.json> --track-id <id>
-  add-clip <project.json> --track-id <id> --clip '<json>'
-  add-notes <project.json> --track-id <id> --clip-id <id> --notes '<json array>'
-  set-instrument <project.json> --track-id <id> --instrument '<json|type>'
-  add-fx <project.json> --track-id <id> --fx '<json>'
-  add-automation <project.json> --track-id <id> --automation '<json>'
-  import-notes <score.notes.json> <project.json>
   import-abc <tune.abc> --out <project.json>
   export-abc <project.json> --out <tune.abc>
   import-midi <file.mid> (--out <project.json> | --into <existing.json>)
@@ -33,8 +22,7 @@ Sound
                        normalizes the result to the target LUFS
          The report lists each track's peak, LUFS and RMS dBFS before the master bus, and warns
          (trackBalance) when a track sits over 16 LU below the loudest.
-  critique <project.json> [--min 0.85]
-  analyze <file.wav | project.json>
+  analyze <file.wav>
   edit <op> --in <a.wav> [--in <b.wav>] --out <file> [--backend native|sox|rubberband|ffmpeg] [--<param> value ...]
        ops: trim-silence, fade, normalize, pitch, stretch, layer, export
        export --codec opus|ogg|mp3|flac [--bitrate 96k]: encode through ffmpeg with bitexact flags,
@@ -68,7 +56,7 @@ function parseArgs(argv: readonly string[]): Parsed {
 const camel = (k: string): string => k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
 const BOOLEAN_FLAGS = new Set(['overwrite', 'full', 'loop', 'preserve-duration']);
-const JSON_FLAGS = new Set(['track', 'clip', 'notes', 'fx', 'automation', 'gains-db', 'offsets-s']);
+const JSON_FLAGS = new Set(['gains-db', 'offsets-s']);
 const EDIT_FLAGS: Record<EditOp, readonly string[]> = {
   'trim-silence': ['threshold-db', 'pad-ms'],
   fade: ['in-s', 'out-s', 'curve'],
@@ -87,7 +75,7 @@ function flagArgs(flags: Map<string, string[]>, skip: readonly string[] = []): R
     if (BOOLEAN_FLAGS.has(key)) {
       if (value !== 'true' && value !== 'false') throw new ToolError(`--${key} expects true or false`);
       out[camel(key)] = value === 'true';
-    } else if (JSON_FLAGS.has(key) || (key === 'instrument' && /^[{"]/.test(value.trimStart()))) {
+    } else if (JSON_FLAGS.has(key)) {
       out[camel(key)] = JSON.parse(value) as unknown;
     } else {
       out[camel(key)] = value;
@@ -100,13 +88,6 @@ const COMMAND_TOOL: Readonly<Record<string, string>> = {
   init: 'project_init',
   validate: 'project_validate',
   dump: 'project_dump',
-  'add-track': 'add_track',
-  'remove-track': 'remove_track',
-  'add-clip': 'add_clip',
-  'add-notes': 'add_notes',
-  'set-instrument': 'set_instrument',
-  'add-fx': 'add_fx',
-  'add-automation': 'add_automation',
   render: 'render',
   masking: 'masking',
   audition: 'audition',
@@ -132,7 +113,11 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
   const first = positional[0];
   const tool = COMMAND_TOOL[cmd];
   if (tool !== undefined) {
-    if (first === undefined) throw new ToolError(`${cmd} needs a project path`);
+    if (positional.length !== 1) throw new ToolError(cmd + ' needs one project path');
+    const properties = findTool(tool)?.inputSchema.properties;
+    for (const key of flags.keys()) {
+      if (key === 'project' || !properties || !Object.hasOwn(properties, camel(key))) throw new ToolError('Unknown flag for ' + cmd + ': --' + key);
+    }
     const args: Record<string, unknown> = { project: first, ...flagArgs(flags) };
     if (cmd === 'render') {
       // Ids and layer names stay strings, so `--tracks 1` is track "1", not the number 1.
@@ -158,20 +143,10 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
         throw new ToolError('Usage: lint <score.json> [--style strict|free]');
       return callTool('lint', { score: first, style: flags.get('style')?.[0] });
     }
-    case 'critique': {
-      if (first === undefined) throw new ToolError('critique needs a project path');
-      const result = critiqueProject(readProject(first));
-      print(result);
-      const value = flags.get('min')?.at(-1);
-      if (value === undefined) return 0;
-      const min = Number(value);
-      if (!Number.isFinite(min) || min < 0 || min > 1) throw new ToolError('--min requires a number from 0 to 1');
-      return result.score < min ? 1 : 0;
-    }
     case 'analyse':
     case 'analyze':
-      if (first === undefined) throw new ToolError('analyze needs a file');
-      return callTool('analyse', first.endsWith('.wav') ? { wav: first } : { project: first });
+      if (positional.length !== 1 || flags.size) throw new ToolError('Usage: analyze <file.wav>');
+      return callTool('analyse', { wav: first });
     case 'edit': {
       const op = first;
       if (op === undefined) throw new ToolError('edit needs an op');
@@ -194,18 +169,6 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
         ...(bitDepth !== undefined ? { bitDepth: Number(bitDepth) } : {}),
         params: flagArgs(flags, common),
       });
-    }
-    case 'import-notes': {
-      const out = positional[1];
-      if (first === undefined || out === undefined) throw new ToolError('import-notes needs <score.notes.json> <project.json>');
-      const r = importNotes(JSON.parse(fs.readFileSync(first, 'utf8')) as unknown);
-      if (!r.ok) {
-        print({ errors: r.errors });
-        return 1;
-      }
-      saveProjectFile(out, r.value);
-      print({ project: out, warnings: r.warnings });
-      return 0;
     }
     default:
       throw new ToolError(`unknown command "${cmd}"\n\n${SCORE_USAGE}`);

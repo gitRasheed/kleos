@@ -1,5 +1,5 @@
 import { applyParametricEq } from './eqParametric.js';
-import { SAMPLE_RATE, biquad, biquadStep, dbToGain, onePoleCoeff, type Biquad, type Stereo } from './dsp.js';
+import { SAMPLE_RATE, biquad, biquadStep, filterChain, dbToGain, onePoleCoeff, type Biquad, type Stereo } from './dsp.js';
 import { cabFilters } from './instruments/guitar.js';
 import type { FxConfig } from './project.js';
 
@@ -32,14 +32,7 @@ export function applyFx(buf: Stereo, fx: FxConfig, ctx: FxContext): void {
 }
 
 function eachChannel(buf: Stereo, make: () => Biquad[]): void {
-  for (const ch of [buf.left, buf.right]) {
-    const chain = make();
-    for (let i = 0; i < ch.length; i += 1) {
-      let y = ch[i];
-      for (const f of chain) y = biquadStep(f, y);
-      ch[i] = y;
-    }
-  }
+  for (const ch of [buf.left, buf.right]) filterChain(ch, make());
 }
 
 function eq3(buf: Stereo, fx: Extract<FxConfig, { type: 'eq3' }>): void {

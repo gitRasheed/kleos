@@ -1,3 +1,5 @@
+import { biquadStep as stepBiquad, dbToGain as dbToLinear, midiToHz, polyBlep, type Biquad as FilterState } from '../dspPrimitives.js';
+import { makeRng as createMulberry32 } from '../random.js';
 import { applyDcBlock, applyTruePeakLimiter, renderDelaySend } from './effects.js';
 import type {
   AdsrEnvelope,
@@ -19,24 +21,6 @@ export class RecipeError extends Error {
     super(message);
     this.name = 'RecipeError';
   }
-}
-
-function dbToLinear(db: number): number {
-  return Math.pow(10, db / 20);
-}
-
-function midiToHz(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-function createMulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function evalAdsr(t: number, holdEnd: number, env: AdsrEnvelope): number {
@@ -71,18 +55,6 @@ function evalAdsr(t: number, holdEnd: number, env: AdsrEnvelope): number {
     return levelAtRelease * (1 - relT / r);
   }
   return level;
-}
-
-interface FilterState {
-  x1: number;
-  x2: number;
-  y1: number;
-  y2: number;
-  b0: number;
-  b1: number;
-  b2: number;
-  a1: number;
-  a2: number;
 }
 
 function setBiquadCoeffs(f: FilterState, spec: BiquadSpec, freqHz: number, sampleRate: number): void {
@@ -123,15 +95,6 @@ function createBiquad(spec: BiquadSpec, sampleRate: number): FilterState {
   return f;
 }
 
-function stepBiquad(f: FilterState, x0: number): number {
-  const y0 = f.b0 * x0 + f.b1 * f.x1 + f.b2 * f.x2 - f.a1 * f.y1 - f.a2 * f.y2;
-  f.x2 = f.x1;
-  f.x1 = x0;
-  f.y2 = f.y1;
-  f.y1 = y0;
-  return y0;
-}
-
 // Linear attack to 1, then linear decay to 0.
 function evalFilterEnvelope(t: number, env: FilterEnvelopeSpec): number {
   if (env.attackS > 0 && t < env.attackS) {
@@ -141,19 +104,6 @@ function evalFilterEnvelope(t: number, env: FilterEnvelopeSpec): number {
     return 0;
   }
   return Math.max(0, 1 - (t - env.attackS) / env.decayS);
-}
-
-// Two-sample polynomial correction around each waveform step, removing most of the energy that folds back.
-function polyBlep(t: number, dt: number): number {
-  if (t < dt) {
-    const x = t / dt;
-    return x + x - x * x - 1;
-  }
-  if (t > 1 - dt) {
-    const x = (t - 1) / dt;
-    return x * x + x + x + 1;
-  }
-  return 0;
 }
 
 interface MixTarget {

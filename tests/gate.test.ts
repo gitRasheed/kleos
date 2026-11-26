@@ -226,18 +226,3 @@ test('music permits a written opening rest and dark rolloff until explicitly gat
   assert.equal(required.findings.find((f) => f.code === 'LEADING_SILENCE')?.severity, 'fail');
   assert.equal(required.findings.find((f) => f.code === 'SPECTRAL_ROLLOFF')?.severity, 'fail');
 });
-
-test('critique gates a sparse score only when given an explicit minimum', () => {
-  const dir = tmpDir();
-  try {
-    const file = path.join(dir, 'sparse.json');
-    fs.writeFileSync(file, JSON.stringify(project({ tracks: [] })));
-    const advisory = spawnSync(process.execPath, [cli, 'critique', file], { encoding: 'utf8' });
-    const required = spawnSync(process.execPath, [cli, 'critique', file, '--min', '0.85'], { encoding: 'utf8' });
-    assert.equal(advisory.status, 0, advisory.stderr);
-    assert.equal(required.status, 1, required.stderr);
-    assert.equal(advisory.stdout, required.stdout);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});

@@ -1,4 +1,5 @@
-import { Key } from 'tonal';
+import { decodeMidi, decodeTrack } from '../notation/midiBridge.js';
+import * as Key from '@tonaljs/key';
 import { INSTRUMENT_DEFS } from '../theory/instruments.js';
 import { expandTrackNotes, tonicPc, type Project } from './project.js';
 import { PPQ } from '../notation/conductor.js';
@@ -120,66 +121,15 @@ export interface ParsedMidi {
 }
 
 export function parseMidi(bytes: Uint8Array): ParsedMidi {
-  const u32 = (o: number): number => ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
-  const u16 = (o: number): number => (bytes[o] << 8) | bytes[o + 1];
-  if (String.fromCharCode(...bytes.subarray(0, 4)) !== 'MThd') throw new Error('not a MIDI file');
-  const format = u16(8);
-  const ntracks = u16(10);
-  const ppq = u16(12);
-  let o = 8 + u32(4);
-  const notes: MidiNote[] = [];
-  const names: string[] = [];
-  let tempo: number | null = null;
-  for (let t = 0; t < ntracks; t += 1) {
-    if (String.fromCharCode(...bytes.subarray(o, o + 4)) !== 'MTrk') throw new Error(`track ${t} has no MTrk header`);
-    const end = o + 8 + u32(o + 4);
-    let i = o + 8;
-    let tick = 0;
-    let status = 0;
-    const open = new Map<string, { velocity: number; start: number }>();
-    const readVlq = (): number => {
-      let v = 0;
-      for (;;) {
-        const b = bytes[i++];
-        v = (v << 7) | (b & 0x7f);
-        if ((b & 0x80) === 0) return v;
-      }
-    };
-    while (i < end) {
-      tick += readVlq();
-      let b = bytes[i];
-      if (b >= 0x80) {
-        status = b;
-        i += 1;
-      } else b = status;
-      if (status === 0xff) {
-        const type = bytes[i++];
-        const len = readVlq();
-        if (type === 0x51) tempo = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
-        if (type === 0x03) names[t] = Buffer.from(bytes.subarray(i, i + len)).toString('utf8');
-        i += len;
-        continue;
-      }
-      if (status === 0xf0 || status === 0xf7) {
-        i += readVlq();
-        continue;
-      }
-      const kind = status & 0xf0;
-      const ch = status & 0x0f;
-      const d1 = bytes[i++];
-      const d2 = kind === 0xc0 || kind === 0xd0 ? 0 : bytes[i++];
-      const key = `${ch}:${d1}`;
-      if (kind === 0x90 && d2 > 0) open.set(key, { velocity: d2, start: tick });
-      else if (kind === 0x80 || (kind === 0x90 && d2 === 0)) {
-        const s = open.get(key);
-        if (s !== undefined) {
-          notes.push({ track: t, channel: ch, midi: d1, velocity: s.velocity, startTick: s.start, endTick: tick });
-          open.delete(key);
-        }
-      }
-    }
-    names[t] ??= '';
-    o = end;
+  const { header, tracks } = decodeMidi(bytes);
+  const ppq = header.ticksPerBeat ?? ((bytes[12] << 8) | bytes[13]);
+  const trackNames: string[] = [], notes: MidiNote[] = [];
+  let tempoUsPerBeat: number | null = null;
+  for (const [track, events] of tracks.entries()) {
+    const decoded = decodeTrack(events);
+    trackNames.push(decoded.name);
+    for (const { event } of decoded.timeline) if (event.type === 'setTempo') tempoUsPerBeat = event.microsecondsPerBeat;
+    for (const n of decoded.notes) notes.push({ track, channel: n.channel, midi: n.midi, velocity: n.velocity, startTick: n.ticks, endTick: n.ticks + n.durationTicks });
   }
-  return { format, ppq, tracks: ntracks, tempoUsPerBeat: tempo, trackNames: names, notes };
+  return { format: header.format, ppq, tracks: tracks.length, tempoUsPerBeat, trackNames, notes };
 }

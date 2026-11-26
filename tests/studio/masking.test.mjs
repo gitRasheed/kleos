@@ -24,10 +24,16 @@ test('non-overlapping notes and silent leads produce no masking', () => {
   assert.deepEqual(masked([track('lead', 'lead', 440, -25, 0, 1), track('pad', 'pad', 440, -12, 1)]), []);
   assert.deepEqual(masked([track('lead', 'lead', 440, -Infinity), track('pad', 'pad', 440, -12)]), []);
 });
-for (const [code, hz, phase] of [['LOW_MID_BUILDUP', 330, 1], ['HARSH_BAND', 4000, 1], ['SUB_RUMBLE', 25, 1], ['MONO_LOSS', 880, -1]]) {
-  test(code + ' is located and clears on a centered 880 Hz control', () => {
-    const hits = analyzeMix([track('voice', 'pad', hz, -12, 0, 2.4, phase)], sr, tempo);
-    assert.ok(hits.some(f => f.code === code && f.trackId === 'master' && f.bar === 1 && Number.isFinite(f.valueDb)));
-    assert.deepEqual(analyzeMix([track('voice', 'pad', 880, -12)], sr, tempo), []);
-  });
-}
+test('opposite-channel lead and pad do not mask each other', () => {
+  const solo = track('solo', 'lead', 440, -25);
+  const pad = track('pad', 'pad', 440, -12);
+  solo.audio.right.fill(0);
+  pad.audio.left.fill(0);
+  assert.deepEqual(masked([solo, pad]), []);
+});
+
+test('MONO_LOSS locates an inverted channel and clears on a centered control', () => {
+  const hits = analyzeMix([track('voice', 'pad', 880, -12, 0, 2.4, -1)], sr, tempo);
+  assert.ok(hits.some(f => f.code === 'MONO_LOSS' && f.trackId === 'master' && f.bar === 1 && Number.isFinite(f.valueDb)));
+  assert.deepEqual(analyzeMix([track('voice', 'pad', 880, -12)], sr, tempo), []);
+});

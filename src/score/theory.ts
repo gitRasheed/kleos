@@ -1,38 +1,17 @@
-import { Note, Scale } from 'tonal';
+import * as Note from '@tonaljs/note';
+import * as Scale from '@tonaljs/scale';
 import { INSTRUMENT_DEFS, type Instrument } from '../theory/instruments.js';
 import type { Event, Score, Track } from '../theory/types.js';
 import { PPQ } from './midi.js';
-import { expandTrackNotes, isProjectFormat, parseProject, type PlacedNote, type Project, type Track as ProjectTrack } from './project.js';
+import { trackSegments } from './segments.js';
+import { isProjectFormat, parseProject, type Project, type Track as ProjectTrack } from './project.js';
 
 function trackBars(project: Project, track: ProjectTrack, ticksPerBar: number, spell: (midi: number) => string): Event[][] {
-  const changes = new Map<number, { on: PlacedNote[]; off: PlacedNote[] }>();
-  function at(tick: number) {
-    let change = changes.get(tick);
-    if (!change) {
-      change = { on: [], off: [] };
-      changes.set(tick, change);
-    }
-    return change;
-  }
   const bars: Event[][] = Array.from({ length: project.bars }, () => []);
-  for (let i = 0; i <= bars.length; i++) at(i * ticksPerBar);
-  for (const note of expandTrackNotes(project, track)) {
-    const start = Math.round(note.startBeat * PPQ);
-    const end = Math.max(start + 1, Math.round((note.startBeat + note.durationBeats) * PPQ));
-    at(start).on.push(note);
-    at(end).off.push(note);
-  }
-  const ticks = [...changes.keys()].sort((a, b) => a - b);
-  const active = new Set<PlacedNote>();
-  for (let i = 0; i < ticks.length - 1; i++) {
-    const tick = ticks[i];
-    const { on, off } = at(tick);
-    for (const note of off) active.delete(note);
-    for (const note of on) active.add(note);
+  for (const { on, active, tick, next, bar } of trackSegments(project, track, ticksPerBar, false).segments) {
     const articulations = on.map(n => n.articulation).filter(mark => mark !== 'normal' && mark !== 'sforzando');
-    const bar = Math.min(Math.floor(tick / ticksPerBar), bars.length - 1);
     bars[bar].push({
-      ticks: ticks[i + 1] - tick,
+      ticks: next - tick,
       pitches: Array.from(active, n => spell(n.midi)),
       articulations: [...new Set(articulations)],
     });

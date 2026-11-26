@@ -32,8 +32,15 @@ test('mutant clipping followed by loudness normalization leaves detectable plate
   assert.equal(hits.length, 2);
   assert.ok(hits.every(h => h.code === 'FLAT_TOP_CLIPPING' && h.railDbfs < -10 && h.runs > 100));
 });
+function flatMozart() {
+  const { channels, sampleRate } = readWav('tests/studio/fixtures/mozart.wav');
+  const clipped = channels.map(ch => ch.map(x => Math.max(-0.074, Math.min(0.074, x))));
+  const gain = 10 ** ((-16 - integratedLufs(clipped, sampleRate)) / 20);
+  return { channels: clipped.map(ch => ch.map(x => x * gain)), sampleRate };
+}
+
 test('the normalized Mozart mutation still clips at -16 LUFS and below -15 dBTP', () => {
-  const { channels, sampleRate } = readWav('tests/studio/fixtures/flat.wav');
+  const { channels, sampleRate } = flatMozart();
   const m = measureLoudness(channels, sampleRate);
   near(m.integratedLufs, -16, 0.05); near(m.truePeakDbtp, -15.6, 0.1);
   const hits = detectFlatTopClipping(channels, sampleRate);
@@ -55,7 +62,7 @@ for (const [levels, expected] of [[[-20, -30], 10], [[-20, -15], 5], [[-40, -20]
 }
 for (const [name, expected] of [['flat', 1.9], ['mozart', 1.8], ['beethoven', 8.9]]) {
   test('music LRA within 1 LU of FFmpeg ebur128: ' + name, () => {
-    const { channels, sampleRate } = readWav('tests/studio/fixtures/' + name + '.wav');
+    const { channels, sampleRate } = name === 'flat' ? flatMozart() : readWav('tests/studio/fixtures/' + name + '.wav');
     near(loudnessRange(channels, sampleRate), expected, 1);
   });
 }

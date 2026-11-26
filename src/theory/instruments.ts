@@ -1,4 +1,4 @@
-import { Interval } from 'tonal'
+import * as Interval from '@tonaljs/interval'
 
 export interface InstrumentDef {
   /** Inclusive sounding MIDI pitches, C4 = 60. */

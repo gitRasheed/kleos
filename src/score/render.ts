@@ -3,12 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderPcmSf2 } from '../notation/sf2Adapter.js';
 import { exportMidi } from './midi.js';
-import { SAMPLE_RATE, addInto, clamp, dbToGain, gainToDb, hashString, makeRng, midiToHz, panGains, stereo, svfG, svfStep, type Stereo } from './dsp.js';
+import { SAMPLE_RATE, addInto, clamp, dbToGain, gainToDb, hashString, makeRng, midiToHz, panGains, stereo, tile, svfG, svfStep, type Stereo } from './dsp.js';
 import { applyFx, compressWithMeter, type FxContext } from './fx.js';
 import { INSTRUMENT_MODELS } from './instruments/index.js';
 import { integratedLufs } from '../ears/loudness.js';
 import { masterBus, masterStem, type MasterStats } from './master.js';
 import { expandTrackNotes, loopFrames, type AutomationLane, type Layer, type Project, type Track } from './project.js';
+
+export { tile } from './dsp.js';
 
 export interface RenderOptions {
   readonly projectDir?: string;
@@ -143,13 +145,7 @@ function processTrack(p: Project, t: Track, dry: Stereo, reductions: Reduction[]
   const n = dry.left.length;
   const sr = p.sampleRate;
   const spb = secondsPerBeat(p);
-  // Loops run the stateful chain over two periods and keep the second, so reverb and delay tails wrap.
-  const passes = p.loop ? 2 : 1;
-  const work = stereo(n * passes);
-  for (let k = 0; k < passes; k += 1) {
-    work.left.set(dry.left, k * n);
-    work.right.set(dry.right, k * n);
-  }
+  const work = tile(dry, p.loop ? 2 : 1);
   if (t.instrument.type !== 'sf2') INSTRUMENT_MODELS[t.instrument.type].post?.(work, t.instrument.params);
   const beatOf = (i: number): number => ((i % n) / sr) / spb;
   for (const lane of t.automation.filter((a) => a.param === 'cutoff')) {
@@ -299,16 +295,6 @@ function cutWithFade(buf: Stereo, end: number, sr = SAMPLE_RATE): Stereo {
     const g = clamp(i / fade, 0, 1);
     out.left[end - 1 - i] *= g;
     out.right[end - 1 - i] *= g;
-  }
-  return out;
-}
-
-export function tile(buf: Stereo, times: number): Stereo {
-  const n = buf.left.length;
-  const out = stereo(n * times);
-  for (let k = 0; k < times; k += 1) {
-    out.left.set(buf.left, k * n);
-    out.right.set(buf.right, k * n);
   }
   return out;
 }

@@ -140,7 +140,7 @@ function runRender(args: readonly string[]): number {
   process.stdout.write(
     `${JSON.stringify(
       {
-        schemaVersion: 'agent-audio/render/v1',
+        schemaVersion: 'kleos/render/v1',
         ok: true,
         id,
         kind,
@@ -301,7 +301,7 @@ function runBatch(args: readonly string[]): number {
   } else {
     const results = entries.map(({ row, ...rest }) => ({ ...rest, verdict: row.verdict, findings: row.findings }));
     process.stdout.write(
-      `${JSON.stringify({ schemaVersion: 'agent-audio/batch/v1', ok: entries.every((e) => e.ok), results }, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 'kleos/batch/v1', ok: entries.every((e) => e.ok), results }, null, 2)}\n`,
     );
   }
   if (entries.some((e) => e.error !== undefined)) {

@@ -1,4 +1,5 @@
-import { Chord, Note } from 'tonal'
+import * as Chord from '@tonaljs/chord'
+import * as Note from '@tonaljs/note'
 import { INSTRUMENT_DEFS } from './instruments.js'
 import type { Diagnostic, Event, Location, Score, Track } from './types.js'
 

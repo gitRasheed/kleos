@@ -75,6 +75,11 @@ export function textWidth(text: string): number {
 }
 
 type Canvas = Image;
+type PlotSamples = Float64Array | readonly Float64Array[];
+
+function plotChannels(samples: PlotSamples): readonly Float64Array[] {
+  return samples instanceof Float64Array ? [samples] : samples;
+}
 
 function createCanvas(width: number, height: number): Canvas {
   const rgb = new Uint8Array(width * height * 3);
@@ -275,7 +280,7 @@ function canvasFor(area: PlotArea, extraBottom = 0): Canvas {
 function drawWaveformInto(
   c: Canvas,
   area: PlotArea,
-  samples: Float64Array,
+  channels: readonly Float64Array[],
   axis: TimeAxis,
   labels: boolean,
 ): void {
@@ -292,7 +297,7 @@ function drawWaveformInto(
   }
   hline(c, area.x, area.x + area.width - 1, area.y + rowAtAmplitude(area.height, 0), COLORS.zero);
 
-  const n = samples.length;
+  const n = channels[0]?.length ?? 0;
   if (n === 0) {
     return;
   }
@@ -301,7 +306,7 @@ function drawWaveformInto(
     const end = Math.max(start + 1, frameAtColumn(axis, col + 1));
     let minV = 0;
     let maxV = 0;
-    for (let i = start; i < Math.min(n, end); i += 1) {
+    for (const samples of channels) for (let i = start; i < Math.min(n, end); i += 1) {
       const v = samples[i] ?? 0;
       minV = Math.min(minV, v);
       maxV = Math.max(maxV, v);
@@ -334,21 +339,28 @@ export function spectrogramFreqAxis(sampleRate: number, rows: number): FreqAxis 
 function drawSpectrogramInto(
   c: Canvas,
   area: PlotArea,
-  samples: Float64Array,
+  channels: readonly Float64Array[],
   time: TimeAxis,
   freq: FreqAxis,
 ): void {
-  const n = samples.length;
+  const n = channels[0]?.length ?? 0;
   const sampleRate = time.sampleRate;
   const win = new Float64Array(SPECTRO_FFT);
   for (let col = 0; col < area.width; col += 1) {
     const centre = frameAtColumn(time, col);
     const start = centre - SPECTRO_FFT / 2;
-    for (let i = 0; i < SPECTRO_FFT; i += 1) {
-      const idx = start + i;
-      win[i] = idx >= 0 && idx < n ? (samples[idx] ?? 0) : 0;
+    const spectra = channels.map(samples => {
+      for (let i = 0; i < SPECTRO_FFT; i += 1) {
+        const idx = start + i;
+        win[i] = idx >= 0 && idx < n ? (samples[idx] ?? 0) : 0;
+      }
+      return rfftMagnitude(win, SPECTRO_FFT);
+    });
+    const mag = spectra[0];
+    if (!mag) continue;
+    for (const channel of spectra.slice(1)) {
+      for (let k = 0; k < mag.length; k++) mag[k] = Math.max(mag[k] ?? 0, channel[k] ?? 0);
     }
-    const mag = rfftMagnitude(win, SPECTRO_FFT);
     for (let row = 0; row < area.height; row += 1) {
       const bin = Math.min(mag.length - 1, Math.max(0, Math.round((freqAtRow(freq, row) * SPECTRO_FFT) / sampleRate)));
       const db = 20 * Math.log10((mag[bin] ?? 0) / (SPECTRO_FFT * 0.25) + 1e-9);
@@ -384,7 +396,7 @@ export function renderWaveformImage(samples: Float64Array | readonly Float64Arra
   drawTitle(c, labels?.title ?? 'WAVEFORM  DBFS');
   channels.forEach((channel, i) => {
     const lane = { ...area, y: area.y + i * height, height };
-    drawWaveformInto(c, lane, channel, axis, true);
+    drawWaveformInto(c, lane, [channel], axis, true);
     if (channels.length > 1) drawText(c, ['L', 'R'][i] ?? String(i + 1), 2, lane.y);
     drawFrame(c, lane);
   });
@@ -392,12 +404,13 @@ export function renderWaveformImage(samples: Float64Array | readonly Float64Arra
   return c;
 }
 
-export function renderSpectrogramImage(samples: Float64Array, sampleRate: number, width = 640, height = 240, labels?: PlotLabels): Image {
+export function renderSpectrogramImage(samples: PlotSamples, sampleRate: number, width = 640, height = 240, labels?: PlotLabels): Image {
   const area = plotArea(width, height);
   const c = canvasFor(area);
-  const time = spectrogramTimeAxis(samples.length, sampleRate, width);
+  const channels = plotChannels(samples);
+  const time = spectrogramTimeAxis(channels[0]?.length ?? 0, sampleRate, width);
   drawTitle(c, labels?.title ?? 'SPECTROGRAM  HZ (LOG)');
-  drawSpectrogramInto(c, area, samples, time, spectrogramFreqAxis(sampleRate, height));
+  drawSpectrogramInto(c, area, channels, time, spectrogramFreqAxis(sampleRate, height));
   drawTimeAxis(c, area, time, false, labels?.barS);
   drawFrame(c, area);
   return c;
@@ -407,17 +420,19 @@ export function renderSpectrogramImage(samples: Float64Array, sampleRate: number
  * The loop end joined to the loop start: a waveform strip over a spectrogram, both centred on the wrap.
  * Time ticks read in ms relative to the wrap; the wrap itself is marked in the margins so it never hides a click.
  */
-export function renderSeamImage(stitched: Float64Array, sampleRate: number, width = 480): Image {
+export function renderSeamImage(samples: PlotSamples, sampleRate: number, width = 480): Image {
   const waveHeight = 90;
   const spectroHeight = 160;
   const gap = 20;
   const waveArea = plotArea(width, waveHeight);
   const spectroArea: PlotArea = { x: MARGIN.left, y: waveArea.y + waveHeight + gap, width, height: spectroHeight };
   const c = createCanvas(waveArea.x + width + MARGIN.right, spectroArea.y + spectroHeight + MARGIN.bottom);
-  const halfS = stitched.length / 2 / sampleRate;
+  const stitched = plotChannels(samples);
+  const frames = stitched[0]?.length ?? 0;
+  const halfS = frames / 2 / sampleRate;
 
   drawTitle(c, 'LOOP SEAM  DBFS');
-  const waveAxis: TimeAxis = { frames: Math.max(1, stitched.length), sampleRate, originS: -halfS, columns: width };
+  const waveAxis: TimeAxis = { frames: Math.max(1, frames), sampleRate, originS: -halfS, columns: width };
   const waveWrapX = waveArea.x + columnAtTime(waveAxis, 0);
   // Drawn first so the waveform stays on top of it.
   vline(c, waveWrapX, waveArea.y, waveArea.y + waveArea.height - 1, COLORS.wrap, 3);
@@ -425,7 +440,7 @@ export function renderSeamImage(stitched: Float64Array, sampleRate: number, widt
   drawTimeAxis(c, waveArea, waveAxis, true);
   drawFrame(c, waveArea);
 
-  const spectroAxis = spectrogramTimeAxis(stitched.length, sampleRate, width, -halfS);
+  const spectroAxis = spectrogramTimeAxis(frames, sampleRate, width, -halfS);
   drawSpectrogramInto(c, spectroArea, stitched, spectroAxis, spectrogramFreqAxis(sampleRate, spectroHeight));
   drawFrame(c, spectroArea);
 

@@ -31,7 +31,7 @@ A loop recipe uses `kind: "loop"`, `bpm`, `beats` and tracks with a voice and be
 
 ## Write and mix music
 
-Import a tune with `kleos import-abc theme.abc --out cue.json`, or start a score with `kleos init cue.json --id cue`. A score track has an ID, an instrument and clips. Notes use clip-relative `startBeat`, `durationBeats`, MIDI pitch in `midi` and velocity from 1 to 127. Reuse phrases through named patterns. For sampled instruments, set `instrument` to `{"type":"sf2","params":{"bank":"piano.sf2","program":0}}` with a bank path relative to the score.
+Import a tune with `kleos import-abc theme.abc --out cue.json`, or start a score with `kleos init cue.json --id cue`. Edit the score JSON directly and run `kleos validate cue.json` before rendering. A score track has an ID, an instrument and clips. Notes use clip-relative `startBeat`, `durationBeats`, MIDI pitch in `midi` and velocity from 1 to 127. Reuse phrases through named patterns. For sampled instruments, set `instrument` to `{"type":"sf2","params":{"bank":"piano.sf2","program":0}}` with a bank path relative to the score.
 
 ```sh
 kleos validate cue.json
@@ -54,7 +54,7 @@ Check a composite with `kleos mix-check mix.json`. Paths in the manifest resolve
 
 ```json
 {
-  "schemaVersion": "agent-audio/mix/v1", "durationS": 4,
+  "schemaVersion": "kleos/mix/v1", "durationS": 4,
   "stems": [
     { "file": "cue.wav", "gainDb": -6, "loop": true },
     { "file": "ping.wav", "gainDb": -3, "offsetS": 0.5 },
