@@ -12,7 +12,6 @@ Build with Node 20.12 or later. From the checkout:
 
 ```sh
 npm ci
-npm run build
 npm pack
 npm install -g ./kleos-0.2.0.tgz
 kleos --help
@@ -29,14 +28,14 @@ kleos check out/shot.wav --summary
 
 The bundled cannon shot lasts 0.240 s. Its raw summary reports a momentary maximum of −22.4 LUFS and a true peak of −5.9 dBTP. `PROFILE` shows which limits applied and `LOOP_CHECKED` tells you whether the gate inspected the wrap. Omit `--summary` for the `kleos/check/v1` JSON report with thresholds and findings. `--png out/inspect` writes inspection plots.
 
-Recipes support sine, triangle, square, saw, noise and FM voices. One-shot voices can sweep in pitch. Loop tracks can repeat notes and send to a delay. Set `bandLimited` on a saw or square to use PolyBLEP. New recipes use `kleos/recipe/v1`. Recipes marked `agent-audio/recipe/v1` still render. [Recipes](recipes/)
+Recipes support sine, triangle, square, saw, noise and FM voices. One-shot voices can sweep in pitch. Loop tracks can repeat notes and send to a delay. Set `bandLimited` on a saw or square to use PolyBLEP. Use `kleos/recipe/v1` for recipes. [Recipes](recipes/)
 
 | Command | What it measures |
 | --- | --- |
 | `kleos check file.wav` | Uses the raw profile by default. Add `--loop` to inspect a standalone loop, or `--project cue.json` for the score’s tempo, loop flag, loudness target and default profile. |
 | `kleos check file.wav --profile music` | Applies music thresholds, including −18 to −14 integrated LUFS by default. Other profiles are `ui`, `sfx` and `ambience`. |
-| `kleos batch recipes --out out/batch --summary` | Renders and checks recipes and checks existing WAVs in the input directory. Recipe kind supplies the loop flag. |
-| `kleos mix-check --mix out/shot.wav:-3,out/shot.wav:-6@0.1` | Checks summed headroom at the stated gains and offsets. All inputs must share a sample rate. |
+| `kleos batch "$(npm root -g)/kleos/recipes" --out out/batch --summary` | Renders and checks recipes and checks existing WAVs in the input directory. Recipe kind supplies the loop flag. |
+| `kleos mix-check --mix out/shot.wav:-3,out/shot.wav:-6@0.1` | Checks summed headroom at the stated gains and offsets. All inputs must share a sample rate. A mix manifest uses `kleos/mix/v1`. |
 
 All WAV check profiles analyze samples at the file’s recorded rate. The mains-hum check requires a persistent 50 or 60 Hz line of at least −55 dBFS.
 
@@ -46,7 +45,7 @@ Exit 0 means the command succeeded. Exit 1 reports a failed verdict, including a
 
 ## Write a score
 
-A `kleos/score/v1` project contains tempo, key, tracks and a master configuration. Projects marked `agent-daw/v1` or `agent-audio/score/v1` also load. Each track has an instrument, clips of notes, optional automation and ordered inserts. Scores render at 48 kHz. Thirteen modeled instruments cover piano, brass, strings, guitars, percussion, synths and cinematic effects. The `sf2` instrument reads an uncompressed PCM SoundFont. For example, `{"type":"sf2","params":{"bank":"piano.sf2","program":0}}` selects program 0 in melodic bank 0. Bank paths resolve relative to the project.
+A `kleos/score/v1` project contains tempo, key, tracks and a master configuration. Each track has an instrument, clips of notes, optional automation and ordered inserts. Scores render at 48 kHz. Thirteen modeled instruments cover piano, brass, strings, guitars, percussion, synths and cinematic effects. The `sf2` instrument reads an uncompressed PCM SoundFont. For example, `{"type":"sf2","params":{"bank":"piano.sf2","program":0}}` selects program 0 in melodic bank 0. Bank paths resolve relative to the project.
 
 After the global install, start in an empty directory and copy the bundled score:
 

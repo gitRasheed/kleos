@@ -30,7 +30,7 @@ test('the render report gives each track LUFS and RMS, and flags one buried 16 L
   assert.match(buried.warnings[0] ?? '', /^trackBalance: violins sits [\d.]+ LU below horns/);
 });
 
-test('render --solo and --tracks render only the named tracks, muted ones included', () => {
+test('render --tracks selects only the named tracks, muted ones included', () => {
   const dir = tmpDir();
   const file = path.join(dir, 'p.json');
   fs.writeFileSync(file, JSON.stringify({ format: 'agent-daw/v1', id: 'solo', kind: 'loop', tempo: { bpm: 120, beatsPerBar: 4 }, key: { tonic: 'D', mode: 'minor' }, bars: 2, tracks: [...mix(0), track('piano', 'piano', chords, { mute: true })] }));
@@ -39,13 +39,28 @@ test('render --solo and --tracks render only the named tracks, muted ones includ
     return { status: r.status, data: r.status === 0 ? JSON.parse(r.stdout) : { tracks: [], out: '', repeatedOut: null } };
   };
   assert.deepEqual(render().data.tracks.map((t) => t.id), ['horns', 'violins']);
-  assert.deepEqual(render('--solo', 'violins').data.tracks.map((t) => t.id), ['violins']);
+  assert.deepEqual(render('--tracks', 'violins').data.tracks.map((t) => t.id), ['violins']);
   assert.deepEqual(render('--tracks', 'piano,horns').data.tracks.map((t) => t.id), ['horns', 'piano']);
-  assert.equal(render('--solo', 'tuba').status, 2);
+  assert.equal(render('--tracks', 'tuba').status, 2);
   const looped = render('--repeats', '2').data;
   assert.equal(looped.out, path.join(dir, 'o.wav'));
   assert.equal(looped.repeatedOut, path.join(dir, 'o_x2.wav'));
   assert.ok(fs.existsSync(looped.repeatedOut));
+});
+
+test('invalid repeat counts leave the output WAV untouched', t => {
+  const dir = tmpDir();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'cue.json');
+  const out = path.join(dir, 'cue.wav');
+  fs.writeFileSync(file, JSON.stringify(project({ bars: 1 })));
+  fs.writeFileSync(out, 'previous render');
+  for (const count of ['0', '-1', '1.5']) {
+    const r = spawnSync(process.execPath, [cli, 'render', file, '--out', out, '--repeats', count], { encoding: 'utf8' });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /repeats must be a positive integer/);
+    assert.equal(fs.readFileSync(out, 'utf8'), 'previous render');
+  }
 });
 
 test('section brightness: 0 is the existing voicing sample for sample, and raising it lifts the 85% rolloff', () => {

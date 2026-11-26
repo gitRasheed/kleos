@@ -30,17 +30,17 @@ function usage(): string {
     'Usage: kleos <command> [options]',
     '',
     'Audio checks',
-    '  check <file.wav> [--profile raw|music|sfx|ui|ambience] [--project <score.json>] [--require-rolloff] [--bpm N] [--loop] [--strict] [--summary] [--png <dir>] [--out <report.json>] [--thresholds <json | file.json>]',
+    '  check <file.wav> [--profile raw|music|sfx|ui|ambience] [--project <score.json>] [--require-rolloff] [--bpm N] [--beats-per-bar N] [--loop] [--strict] [--summary] [--png <dir>] [--out <report.json>] [--thresholds <json | file.json>]',
     '  batch <dir> --out <dir> [--loop] [--strict] [--summary] [--png <dir>] [--thresholds <json | file.json>]',
     '  mix-check <manifest.json> | --mix <a.wav:gainDb[@offsetS],...> [--out <report.json>] [--wav <mix.wav>] [--png <dir>] [--thresholds <json | file.json>]',
-    '  gate is an alias for check',
     '',
     SCORE_USAGE,
     '  skill install [--project]',
     '  --help',
     '',
     'Exit codes: 0 pass, 1 failed check or validation, 2 input/tool error',
-    '--strict turns advisory warnings (ALIASING_SUSPECTED, QUIET_TAIL) into failures.',
+    '--strict turns advisory findings into failures (ALIASING_SUSPECTED, QUIET_TAIL).',
+    'Under music, low SPECTRAL_ROLLOFF is also advisory unless --strict, --require-rolloff or an explicit minimum applies.',
     '--summary prints one table row per file instead of JSON.',
     '',
     'Threshold keys for --thresholds, with defaults:',
@@ -124,7 +124,7 @@ function renderRecipeData(data: unknown): { readonly id: string; readonly kind: 
 }
 
 function runRender(args: readonly string[]): number {
-  const parsed = parseCommandArgs(args, new Set(['--out', '--bit-depth', '--repeats', '--stems-dir', '--layers', '--solo', '--tracks']), new Set());
+  const parsed = parseCommandArgs(args, new Set(['--out', '--bit-depth', '--repeats', '--stems-dir', '--layers', '--tracks']), new Set());
   const source = parsed.positional[0];
   const outPath = parsed.flags.get('--out');
   if (parsed.positional.length !== 1 || source === undefined || typeof outPath !== 'string') {
@@ -182,7 +182,7 @@ function stringFlag(flags: ReadonlyMap<string, string | true>, name: string): st
 function runCheck(args: readonly string[]): number {
   const { positional, flags } = parseCommandArgs(
     args,
-    new Set(['--png', '--png-dir', '--out', '--thresholds', '--profile', '--category', '--project', '--bpm', '--beats-per-bar']),
+    new Set(['--png', '--out', '--thresholds', '--profile', '--project', '--bpm', '--beats-per-bar']),
     new Set(['--loop', '--strict', '--summary', '--require-rolloff']),
   );
   const wavPath = positional[0];
@@ -191,8 +191,8 @@ function runCheck(args: readonly string[]): number {
     return 2;
   }
   const project = stringFlag(flags, '--project');
-  const profile = stringFlag(flags, '--profile') ?? stringFlag(flags, '--category');
-  const pngDir = stringFlag(flags, '--png') ?? stringFlag(flags, '--png-dir');
+  const profile = stringFlag(flags, '--profile');
+  const pngDir = stringFlag(flags, '--png');
   const report = checkFile(wavPath, project === undefined ? null : readProject(project), {
     ...(profile === undefined ? {} : { profile: parseProfile(profile) }),
     ...(flags.has('--loop') ? { loop: true } : {}),
@@ -357,7 +357,7 @@ export function main(argv: readonly string[]): number {
     if (cmd === 'render') {
       return runRender(argv.slice(1));
     }
-    if (cmd === 'check' || cmd === 'gate') {
+    if (cmd === 'check') {
       return runCheck(argv.slice(1));
     }
     if (cmd === 'batch') {

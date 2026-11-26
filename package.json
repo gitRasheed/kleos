@@ -40,7 +40,7 @@
   },
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist', {recursive:true, force:true})\" && tsc -p tsconfig.json",
-    "prepack": "npm run build",
+    "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.audio.json && tsc -p tsconfig.test.json --noEmit",
     "test": "npm run build && node -e \"require('node:fs').rmSync('dist-test', {recursive:true, force:true})\" && tsc -p tsconfig.test.json && node --test --test-concurrency=4 dist-test/tests/*.test.js dist-test/tests/standards/*.test.js tests/theory/*.test.mjs tests/studio/*.test.mjs",
     "lint": "eslint . --max-warnings=0",
@@ -60,6 +60,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "ajv": "6.15.0",
     "midi-file": "1.2.4",
     "musicxml-io": "0.14.0",
     "spessasynth_core": "4.4.12",

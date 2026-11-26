@@ -767,11 +767,6 @@ export function tonicPc(p: Project): number {
   return TONICS[p.key.tonic] ?? 0;
 }
 
-export function scalePcs(p: Project): readonly number[] {
-  const t = tonicPc(p);
-  return (MODES[p.key.mode] ?? MODES.major ?? []).map((d) => (d + t) % 12);
-}
-
 export function loadProjectFile(path: string): ParseResult<Project> {
   let raw: unknown;
   try {

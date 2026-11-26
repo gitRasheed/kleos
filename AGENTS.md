@@ -9,7 +9,7 @@
 
 ## Invariants
 
-Parse a project before rendering or saving edits. Keep unknown-key errors at the offending path. Patterns are keyed by user IDs. Instrument and effect parameters depend on the selected type. Optional additions must preserve published projects’ WAV bytes.
+Parse a project before rendering. Keep unknown-key errors at the offending path. Patterns are keyed by user IDs. Instrument and effect parameters depend on the selected type. Optional additions must preserve published projects’ WAV bytes.
 
 Preserve the seeded draw order for recipes and score notes. Compare decoded data for interchange tests and encoded WAV bytes for render compatibility. Compressed audio bytes also depend on the encoder build.
 

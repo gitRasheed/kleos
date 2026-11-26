@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { handleMessage, parseProject, renderProject } from 'kleos';
+import { handleMessage } from '../../dist/mcp.js';
+import { parseProject, renderProject } from 'kleos';
 
 const project = { format: 'agent-daw/v1', id: 'cue', bars: 1, loop: true };
 const compressor = { type: 'compressor', thresholdDb: -36, ratio: 4 };

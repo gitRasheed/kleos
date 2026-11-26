@@ -2,7 +2,7 @@ import type { EditOp } from './edit.js';
 import { ToolError, findTool } from '../tools.js';
 
 export const SCORE_USAGE = `Project
-  init <project.json> --id <id> [--bpm 120 --bars 16 --tonic D --mode minor --kind loop --target-lufs -16]
+  init <project.json> --id <id> [--title <title>] [--overwrite] [--bpm 120 --beats-per-bar 4 --bars 16 --tonic D --mode minor --kind loop --target-lufs -16]
   validate <project.json>
   lint <score.json> [--style strict|free]
   dump <project.json> [--full]
@@ -15,15 +15,14 @@ Sound
   audition <project.json> --out <dir>
   masking <project.json>
   render <recipe.json | project.json> --out <file.wav>
-         Score options: [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers base,combat] [--tracks id1,id2]
+         Score options: [--bit-depth 24] [--stems-dir dir] [--repeats 2] [--layers <layer1,layer2>] [--tracks id1,id2]
          --repeats N   loops only: --out X.wav keeps one pass and X_xN.wav beside it holds N; both paths
                        are printed as "out" and "repeatedOut"
-         --tracks ids  render only these tracks, muted or not (alias --solo); the master still
-                       normalizes the result to the target LUFS
+         --tracks ids  render the selected tracks even when muted. The master normalizes to the target LUFS.
          The report lists each track's peak, LUFS and RMS dBFS before the master bus, and warns
          (trackBalance) when a track sits over 16 LU below the loudest.
   analyze <file.wav>
-  edit <op> --in <a.wav> [--in <b.wav>] --out <file> [--backend native|sox|rubberband|ffmpeg] [--<param> value ...]
+  edit <op> --in <a.wav> [--in <b.wav>] --out <file> [--bit-depth 16|24|32] [--backend native|sox|rubberband|ffmpeg] [--<param> value ...]
        ops: trim-silence, fade, normalize, pitch, stretch, layer, export
        export --codec opus|ogg|mp3|flac [--bitrate 96k]: encode through ffmpeg with bitexact flags,
        so the same WAV gives the same bytes (defaults: opus 96k VBR, ogg 128k, mp3 192k)
@@ -60,7 +59,7 @@ const JSON_FLAGS = new Set(['gains-db', 'offsets-s']);
 const EDIT_FLAGS: Record<EditOp, readonly string[]> = {
   'trim-silence': ['threshold-db', 'pad-ms'],
   fade: ['in-s', 'out-s', 'curve'],
-  normalize: ['lufs', 'peak-db', 'category', 'ceiling-dbtp', 'loop'],
+  normalize: ['lufs', 'peak-db', 'profile', 'ceiling-dbtp', 'loop'],
   pitch: ['semitones', 'preserve-duration'],
   stretch: ['ratio'],
   layer: ['gains-db', 'offsets-s'],
@@ -111,7 +110,7 @@ function callTool(name: string, args: Record<string, unknown>): number {
 export function scoreCommand(cmd: string, rest: readonly string[]): number {
   const { positional, flags } = parseArgs(rest);
   const first = positional[0];
-  const tool = COMMAND_TOOL[cmd];
+  const tool = Object.hasOwn(COMMAND_TOOL, cmd) ? COMMAND_TOOL[cmd] : undefined;
   if (tool !== undefined) {
     if (positional.length !== 1) throw new ToolError(cmd + ' needs one project path');
     const properties = findTool(tool)?.inputSchema.properties;
@@ -121,7 +120,7 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
     const args: Record<string, unknown> = { project: first, ...flagArgs(flags) };
     if (cmd === 'render') {
       // Ids and layer names stay strings, so `--tracks 1` is track "1", not the number 1.
-      for (const k of ['layers', 'tracks', 'solo']) {
+      for (const k of ['layers', 'tracks']) {
         const v = flags.get(k)?.at(-1);
         if (v !== undefined) args[k] = v.split(',').map((x) => x.trim()).filter((x) => x !== '');
       }
@@ -143,10 +142,9 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
         throw new ToolError('Usage: lint <score.json> [--style strict|free]');
       return callTool('lint', { score: first, style: flags.get('style')?.[0] });
     }
-    case 'analyse':
     case 'analyze':
       if (positional.length !== 1 || flags.size) throw new ToolError('Usage: analyze <file.wav>');
-      return callTool('analyse', { wav: first });
+      return callTool('analyze', { wav: first });
     case 'edit': {
       const op = first;
       if (op === undefined) throw new ToolError('edit needs an op');
@@ -171,6 +169,7 @@ export function scoreCommand(cmd: string, rest: readonly string[]): number {
       });
     }
     default:
-      throw new ToolError(`unknown command "${cmd}"\n\n${SCORE_USAGE}`);
+      process.stderr.write(`Unknown command ${JSON.stringify(cmd)}. Run kleos --help.\n`);
+      return 2;
   }
 }

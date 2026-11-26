@@ -35,13 +35,13 @@ Files from earlier renders can remain in a reused stems directory. Consume the c
 | Batch recipe | The recipe kind determines the loop flag. The batch checks the encoded samples. |
 | Completed check | A failed finding yields exit 1. Advisory findings alone yield success unless promoted by strict mode. Summary rows carry the effective profile and loop status. |
 
-Raw checks use the recipe WAV decoder, which accepts mono or stereo PCM16, PCM24 and float32 at 44.1 or 48 kHz. Other profiles use the broader score WAV decoder. The JSON report records the applied thresholds. A successful raw check with an unchecked seam gives no evidence about the wrap.
+All check profiles read the WAV at its recorded sample rate. The JSON report records the applied thresholds. A successful raw check with an unchecked seam gives no evidence about the wrap.
 
 ## MCP and project files
 
-The stdio server dispatches each JSON-RPC line independently. Initialize returns server information. Tool listing reads the shared registry. Tool calls run synchronously, so a long render delays later messages. Cancellation notifications have no effect on work already running.
+The stdio server dispatches each JSON-RPC line independently. Initialize returns server information. Tool listing reads the shared registry. The server checks arguments against the selected tool’s input schema before dispatch. Tool calls run synchronously, so a long render delays later messages. Cancellation notifications have no effect on work already running.
 
-A project edit reads the file, applies the mutation in memory and parses the whole project before writing normalized JSON. Invalid input or an invalid edit returns an error before the write. Separate CLI or server processes can race when editing the same file. The direct file write has no revision check or transaction.
+`import-midi --into` loads the existing project, replaces its notes and validates the result before writing. Concurrent imports to the same path can overwrite one another.
 
 ## Offline audition
 

@@ -1,9 +1,11 @@
 import { createRequire } from 'node:module';
 import readline from 'node:readline';
+import Ajv from 'ajv';
 import { TOOLS, ToolError, findTool } from './tools.js';
 
 const { name, version } = createRequire(import.meta.url)('kleos/package.json') as { name: string; version: string };
 export const SERVER_INFO = { name, version };
+const validator = new Ajv({ ownProperties: true });
 const DEFAULT_PROTOCOL = '2025-06-18';
 
 interface Request {
@@ -35,9 +37,14 @@ export function handleMessage(msg: Request): Reply {
       const name = msg.params?.name;
       const tool = typeof name === 'string' ? findTool(name) : undefined;
       if (tool === undefined) return fail(-32602, `unknown tool ${String(name)}`);
-      const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
+      const args = msg.params?.arguments === undefined ? {} : msg.params.arguments;
       try {
-        const r = tool.run(args);
+        if (!validator.validate(tool.inputSchema, args)) {
+          const error = validator.errors?.[0];
+          if (error && 'additionalProperty' in error.params) throw new ToolError(`Unknown argument "${error.params.additionalProperty}"`);
+          throw new ToolError(validator.errorsText(validator.errors, { dataVar: 'arguments' }));
+        }
+        const r = tool.run(args as Record<string, unknown>);
         return ok({ content: [{ type: 'text', text: JSON.stringify(r.data, null, 2) }], structuredContent: { ok: r.ok, result: r.data }, isError: !r.ok && tool.verdict !== true });
       } catch (err) {
         const message = err instanceof ToolError ? err.message : `${(err as Error).name}: ${(err as Error).message}`;

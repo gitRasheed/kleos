@@ -96,13 +96,34 @@ test('MCP stdio server: handshake, the audio and score tools, and a compose-rend
   }
 });
 
+test('MCP checks the published input schema before running a tool', async t => {
+  const c = new McpClient();
+  t.after(() => c.kill());
+  const project = 'missing.json';
+  const invalid = [
+    ['project_dump', { project, extra: 1 }, /extra/],
+    ['project_dump', {}, /project/],
+    ['project_init', { project, id: 'cue', bars: '2' }, /bars/],
+    ['render', { project, out: 'x.wav', repeats: 0 }, /repeats/],
+    ['render', { project, out: 'x.wav', repeats: 1.5 }, /repeats/],
+    ['render', { project, out: 'x.wav', tracks: [1] }, /tracks/],
+    ['check', { wav: 'x.wav', profile: 'unknown' }, /profile/],
+    ['import_midi', { midi: 'x.mid', into: project, out: project }, /oneOf/],
+  ] as const;
+  for (const [name, args, expected] of invalid) {
+    const result = await c.call(name, args);
+    assert.equal(result.isError, true);
+    assert.match(String(result.data), expected);
+  }
+});
+
 async function roundTrip(c: McpClient, dir: string, proj: string): Promise<void> {
   const init = await c.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } });
   assert.equal((init.result as { serverInfo: { name: string } }).serverInfo.name, 'kleos');
   c.notify('notifications/initialized');
   const list = await c.request('tools/list');
   const names = (list.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['analyse', 'audition', 'masking', 'check', 'edit', 'export_midi', 'export_abc', 'export_musicxml', 'import_abc', 'import_midi', 'lint', 'project_dump', 'project_init', 'project_validate', 'render'].sort());
+  assert.deepEqual(names, ['analyze', 'audition', 'masking', 'check', 'edit', 'export_midi', 'export_abc', 'export_musicxml', 'import_abc', 'import_midi', 'lint', 'project_dump', 'project_init', 'project_validate', 'render'].sort());
 
   assert.equal((await c.call('project_init', { project: proj, id: 'cue', bars: 2, bpm: 120, tonic: 'D', mode: 'minor' })).isError, false);
   const score = JSON.parse(fs.readFileSync(proj, 'utf8'));
@@ -118,10 +139,11 @@ async function roundTrip(c: McpClient, dir: string, proj: string): Promise<void>
   const wav = path.join(dir, 'cue.wav');
   const rendered = await c.call('render', { project: proj, out: wav, bitDepth: 24 });
   assert.equal(rendered.isError, false);
+  assert.equal((rendered.data as { schemaVersion: string }).schemaVersion, 'kleos/render/v1');
   assert.ok(fs.existsSync(wav));
-  const gate = await c.call('check', { wav, project: proj, category: 'music' });
+  const gate = await c.call('check', { wav, project: proj, profile: 'music', beatsPerBar: 4 });
   assert.equal(typeof (gate.data as { ok?: unknown }).ok, 'boolean');
-  const audio = (await c.call('analyse', { wav })).data as { loudness: { integratedLufs: number } };
+  const audio = (await c.call('analyze', { wav })).data as { loudness: { integratedLufs: number } };
   assert.ok(Math.abs(audio.loudness.integratedLufs + 16) < 0.5);
   await c.call('edit', { op: 'normalize', inputs: [wav], out: path.join(dir, 'n.wav'), params: { lufs: -18 } });
   assert.ok(fs.existsSync(path.join(dir, 'n.wav')));

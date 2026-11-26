@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { dbToGain } from './dsp.js';
-import { CATEGORIES, type Category } from '../ears/gate.js';
+import { parseProfile, type Profile } from '../ears/profiles.js';
 import { integratedLufs, measureLoudness, measureTruePeak } from '../ears/loudness.js';
 import { crop, limit, wrapPad } from './master.js';
 import { readWav, writeWav, type Audio, type BitDepth } from '../io/wav.js';
@@ -36,7 +36,7 @@ export function codecArgs(codec: Codec, bitrate: unknown): string[] {
   return [...c.encoder, ...(rate !== null ? ['-b:a', rate] : []), '-map_metadata', '-1', '-fflags', '+bitexact', '-flags:a', '+bitexact', '-f', c.format];
 }
 
-export const CATEGORY_LUFS: Readonly<Record<Category, number>> = { music: -16, sfx: -18, ui: -22, ambience: -24 };
+export const PROFILE_LUFS: Readonly<Record<Exclude<Profile, 'raw'>, number>> = { music: -16, sfx: -18, ui: -22, ambience: -24 };
 
 export function hasBinary(bin: string): boolean {
   const r = spawnSync(bin, ['--version'], { stdio: 'ignore' });
@@ -80,7 +80,7 @@ export function fade(a: Audio, inS: number, outS: number, curve: 'linear' | 'equ
 export interface NormalizeOptions {
   readonly lufs?: number;
   readonly peakDb?: number;
-  readonly category?: Category;
+  readonly profile?: Exclude<Profile, 'raw'>;
   readonly ceilingDbtp?: number;
   readonly loop?: boolean;
 }
@@ -93,7 +93,7 @@ export function normalize(a: Audio, o: NormalizeOptions): { readonly audio: Audi
     const tp = measureTruePeak(a.channels).truePeakLinear;
     gainDb = tp > 0 ? o.peakDb - 20 * Math.log10(tp) : 0;
   } else {
-    const target = o.lufs ?? CATEGORY_LUFS[o.category ?? 'music'];
+    const target = o.lufs ?? PROFILE_LUFS[o.profile ?? 'music'];
     const now = integratedLufs(a.channels, a.sampleRate) ?? measureLoudness(a.channels, a.sampleRate).momentaryMaxLufs;
     gainDb = now === null ? 0 : target - now;
   }
@@ -307,11 +307,12 @@ export function runEdit(req: EditRequest): EditResult {
     case 'fade':
       return finish(fade(a, numParam(p, 'inS', numParam(p, 'in', 0.005)), numParam(p, 'outS', numParam(p, 'out', 0.03)), p.curve === 'linear' ? 'linear' : 'equal-power'));
     case 'normalize': {
-      const cat = typeof p.category === 'string' && (CATEGORIES as readonly string[]).includes(p.category) ? (p.category as Category) : undefined;
+      const profile = p.profile === undefined ? undefined : parseProfile(String(p.profile));
+      if (profile === 'raw') throw new Error('The raw profile has no normalization target');
       const r = normalize(a, {
         ...(p.lufs !== undefined ? { lufs: numParam(p, 'lufs') } : {}),
         ...(p.peakDb !== undefined ? { peakDb: numParam(p, 'peakDb') } : {}),
-        ...(cat !== undefined ? { category: cat } : {}),
+        ...(profile !== undefined ? { profile } : {}),
         ceilingDbtp: numParam(p, 'ceilingDbtp', -1.5),
         loop: p.loop === true || p.loop === 'true',
       });

@@ -5,7 +5,8 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath, URL } from 'node:url'
-import { handleMessage, lintScore, parseLintScore } from 'kleos'
+import { handleMessage } from '../../dist/mcp.js'
+import { lintScore, parseLintScore } from 'kleos'
 
 const cli = fileURLToPath(new URL('../../dist/cli.js', import.meta.url))
 const note = (midi, startBeat, durationBeats) => ({ midi, startBeat, durationBeats })

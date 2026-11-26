@@ -4,7 +4,7 @@ import { lintScore } from './theory/index.js';
 import { parseLintScore } from './score/theory.js';
 import { EDIT_OPS, runEdit, type Backend, type EditOp } from './score/edit.js';
 import { PROFILES, parseProfile } from './ears/profiles.js';
-import { analyseAudioFile, inspectMix, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
+import { analyzeAudioFile, inspectMix, dump, checkFile, renderToFiles, writeMidi } from './score/ops.js';
 import {
   KINDS,
   LAYERS,
@@ -102,13 +102,18 @@ const checkTool: Tool = {
   name: 'check',
   verdict: true,
   description: 'Objective listening gate on a WAV: BS.1770-4 loudness, 4x true peak, loop seam vs bar lines, DC, clicks, 50/60 Hz hum, silent channel, stereo phase, spectral balance; writes waveform and spectrogram PNGs.',
-  inputSchema: schema({ wav: s('WAV path'), project: s('Project path for tempo, loop and loudness target'), profile: { type: 'string', enum: PROFILES }, category: { type: 'string', enum: PROFILES }, requireRolloff: { type: 'boolean' }, pngDir: s('Directory for PNGs'), loop: { type: 'boolean' }, bpm: n('Tempo for bar-line seam comparison') }, ['wav']),
+  inputSchema: schema({
+    wav: s('WAV path'), project: s('Project path for tempo, loop and loudness target'),
+    profile: { type: 'string', enum: PROFILES }, requireRolloff: { type: 'boolean' },
+    pngDir: s('Directory for PNGs'), loop: { type: 'boolean' }, bpm: n('Tempo for bar-line seam comparison'),
+    beatsPerBar: { type: 'integer', minimum: 1, description: 'Beats per bar for seam comparison' },
+  }, ['wav']),
   run: (a) => {
     const p = typeof a.project === 'string' ? load(a) : null;
-    const profile = optStr(a, 'profile') ?? optStr(a, 'category');
+    const profile = optStr(a, 'profile');
     const report = checkFile(reqStr(a, 'wav'), p, defined({
       profile: profile === undefined ? undefined : parseProfile(profile), pngDir: optStr(a, 'pngDir'),
-      loop: typeof a.loop === 'boolean' ? a.loop : undefined, bpm: optNum(a, 'bpm'), requireRolloff: a.requireRolloff === true,
+      loop: typeof a.loop === 'boolean' ? a.loop : undefined, bpm: optNum(a, 'bpm'), beatsPerBar: optNum(a, 'beatsPerBar'), requireRolloff: a.requireRolloff === true,
     }));
     return { ok: report.ok, data: report };
   },
@@ -151,7 +156,7 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'project_dump',
-    description: 'Summarise a project (tracks, note counts, fx, sections). Pass full: true for the normalised JSON.',
+    description: 'Summarize a project (tracks, note counts, fx, sections). Pass full: true for the normalized JSON.',
     inputSchema: schema({ ...projectArg, full: { type: 'boolean' } }, ['project']),
     run: (a) => {
       const p = load(a);
@@ -160,16 +165,20 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'render',
-    description: 'Render the project to a 48 kHz stereo WAV through the loop-safe master bus. Reports per-track peak, LUFS and RMS before the master, plus trackBalance warnings for tracks over 16 LU under the loudest. Optional per-layer stems, a track subset (tracks or its alias solo), and an N-times looped file written beside out as <name>_xN.wav.',
-    inputSchema: schema({ ...projectArg, out: s('Output WAV path'), bitDepth: { type: 'number', enum: [16, 24, 32] }, stemsDir: s('Directory for per-layer stems'), repeats: n('Loops only: also write <out name>_xN.wav, the loop tiled N times; out keeps the single pass'), layers: { type: 'array', items: { type: 'string', enum: LAYERS } }, tracks: { type: 'array', items: { type: 'string' }, description: 'Render only these track ids, muted or not; the master still normalises to the target LUFS' }, solo: { type: 'array', items: { type: 'string' }, description: 'Alias of tracks' } }, ['project', 'out']),
+    description: 'Render the project to a 48 kHz stereo WAV through the loop-safe master bus. Reports per-track peak, LUFS and RMS before the master, plus trackBalance warnings for tracks over 16 LU under the loudest. Optional per-layer stems, a track subset, and an N-times looped file written beside out as <name>_xN.wav.',
+    inputSchema: schema({
+      ...projectArg, out: s('Output WAV path'), bitDepth: { type: 'number', enum: [16, 24, 32] },
+      stemsDir: s('Directory for per-layer stems'),
+      repeats: { type: 'integer', minimum: 1, description: 'For loops, N > 1 also writes <name>_xN.wav with N passes' },
+      layers: { type: 'array', items: { type: 'string', enum: LAYERS } },
+      tracks: { type: 'array', items: { type: 'string' }, description: 'Render the selected tracks even when muted. The master normalizes to the target LUFS.' },
+    }, ['project', 'out']),
     run: (a) => {
       const p = load(a);
       const bd = bitDepth(a);
       const layers = Array.isArray(a.layers) ? (a.layers as unknown[]).map(String) : undefined;
       if (layers?.some((l) => !(LAYERS as readonly string[]).includes(l))) throw new ToolError(`layers must be among ${LAYERS.join(', ')}`);
-      const picked = [a.tracks, a.solo].filter((v) => v !== undefined);
-      if (picked.some((v) => !Array.isArray(v))) throw new ToolError('tracks and solo must be arrays of track ids');
-      const trackIds = picked.length === 0 ? undefined : (picked as unknown[][]).flat().map(String);
+      const trackIds = Array.isArray(a.tracks) ? (a.tracks as string[]) : undefined;
       return {
         ok: true,
         data: renderToFiles(p, {
@@ -182,8 +191,8 @@ export const TOOLS: readonly Tool[] = [
   },
   {
     name: 'edit',
-    description: `Edit WAV files (the sfx_edit role): ${EDIT_OPS.join(', ')}. Backends: native (default), sox, rubberband (pitch/stretch), ffmpeg (export to other formats). Export params codec opus|ogg|mp3|flac and bitrate (e.g. 96k) encode deterministically through ffmpeg.`,
-    inputSchema: schema({ op: { type: 'string', enum: EDIT_OPS }, inputs: { type: 'array', items: { type: 'string' } }, out: s('Output path'), backend: { type: 'string', enum: ['native', 'sox', 'rubberband', 'ffmpeg'] }, bitDepth: { type: 'number', enum: [16, 24, 32] }, params: o('Op parameters, e.g. {semitones}, {ratio}, {lufs|category|peakDb}, {in, out}, {codec, bitrate}') }, ['op', 'inputs', 'out']),
+    description: `Edit WAV files: ${EDIT_OPS.join(', ')}. Backends: native (default), sox, rubberband (pitch/stretch), ffmpeg (export to other formats). Export params codec opus|ogg|mp3|flac and bitrate (e.g. 96k) encode deterministically through ffmpeg.`,
+    inputSchema: schema({ op: { type: 'string', enum: EDIT_OPS }, inputs: { type: 'array', items: { type: 'string' } }, out: s('Output path'), backend: { type: 'string', enum: ['native', 'sox', 'rubberband', 'ffmpeg'] }, bitDepth: { type: 'number', enum: [16, 24, 32] }, params: o('Op parameters, e.g. {semitones}, {ratio}, {lufs|profile|peakDb}, {in, out}, {codec, bitrate}') }, ['op', 'inputs', 'out']),
     run: (a) => {
       const op = reqStr(a, 'op');
       if (!(EDIT_OPS as readonly string[]).includes(op)) throw new ToolError(`op must be one of ${EDIT_OPS.join(', ')}`);
@@ -203,10 +212,10 @@ export const TOOLS: readonly Tool[] = [
     },
   },
   {
-    name: 'analyse',
+    name: 'analyze',
     description: 'Measure WAV loudness, spectrum and stereo balance.',
     inputSchema: schema({ wav: s('WAV path') }, ['wav']),
-    run: a => ({ ok: true, data: analyseAudioFile(reqStr(a, 'wav')) }),
+    run: a => ({ ok: true, data: analyzeAudioFile(reqStr(a, 'wav')) }),
   },
   {
     name: 'lint',

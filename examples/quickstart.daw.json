@@ -4,7 +4,7 @@
   "kind": "cue",
   "bars": 1,
   "tracks": [{
-    "id": "piano", "instrument": "piano",
+    "id": "piano", "instrument": { "type": "piano", "params": { "pedal": false } },
     "clips": [{ "id": "theme", "notes": [
       { "midi": 60, "startBeat": 0, "durationBeats": 1 },
       { "midi": 64, "startBeat": 1, "durationBeats": 1 },

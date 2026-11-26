@@ -171,13 +171,13 @@ test('the gate writes labelled waveform and spectrogram PNGs', () => {
   fs.rmSync(path.resolve(dir), { recursive: true, force: true });
 });
 
-test('a WAV cut short under its original header is rejected, by decodeWav and by gate with exit 2', () => {
+test('a WAV cut short under its original header is rejected, by decodeWav and by check with exit 2', () => {
   const full = encodeWav({ sampleRate: SR, channels: [new Float64Array(2 * SR).fill(0.25), new Float64Array(2 * SR).fill(0.25)] }, 32);
   const half = full.slice(0, Math.floor(full.length / 2));
   assert.throws(() => decodeWav(half), (e: Error) => e instanceof WavError && /truncated/.test(e.message));
   const file = path.join(tmpDir(), 'half.wav');
   fs.writeFileSync(file, half);
-  const r = spawnSync(process.execPath, [cli, 'gate', file], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [cli, 'check', file], { encoding: 'utf8' });
   assert.equal(r.status, 2, r.stdout);
   assert.match(r.stderr, /truncated/);
   // A missing pad byte after an odd-sized final chunk is not truncation.

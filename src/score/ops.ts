@@ -41,15 +41,17 @@ export function inspectMix(p: Project, projectDir: string, auditionDir?: string)
 }
 
 export function renderToFiles(p: Project, o: RenderFilesOptions): Record<string, unknown> {
+  const repeats = o.repeats ?? 1;
+  if (!Number.isInteger(repeats) || repeats < 1) throw new Error('repeats must be a positive integer');
   const t0 = performance.now();
   const r = renderProject(p, o);
   const bitDepth = o.bitDepth ?? 24;
   writeWav(o.out, { sampleRate: p.sampleRate, channels: [r.mix.left, r.mix.right] }, bitDepth);
   const written: string[] = [o.out];
   let repeatedOut: string | null = null;
-  if ((o.repeats ?? 1) > 1 && p.loop) {
-    const looped = tile(r.mix, o.repeats ?? 1);
-    repeatedOut = repeatsPath(o.out, o.repeats ?? 1);
+  if (repeats > 1 && p.loop) {
+    const looped = tile(r.mix, repeats);
+    repeatedOut = repeatsPath(o.out, repeats);
     writeWav(repeatedOut, { sampleRate: p.sampleRate, channels: [looped.left, looped.right] }, bitDepth);
     written.push(repeatedOut);
   }
@@ -63,6 +65,7 @@ export function renderToFiles(p: Project, o: RenderFilesOptions): Record<string,
     }
   }
   return {
+    schemaVersion: 'kleos/render/v1',
     reductions: r.reductions,
     findings: r.findings,
     out: o.out,
@@ -100,7 +103,7 @@ export function checkFile(file: string, p: Project | null, o: CheckOptions & { p
   return { ...report, pngs: writeInspectionPngs(audio, o.pngDir, name, report.loopChecked, labels) };
 }
 
-export function analyseAudioFile(file: string): Record<string, unknown> {
+export function analyzeAudioFile(file: string): Record<string, unknown> {
   const audio = readWav(file);
   const report = gateAudio(audio, { category: 'music' });
   return {
